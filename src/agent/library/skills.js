@@ -82,7 +82,13 @@ export async function craftRecipe(bot, itemName, num=1) {
         }
     }
     if (!recipes || recipes.length === 0) {
-        log(bot, `You do not have the resources to craft a ${itemName}. It requires: ${Object.entries(mc.getItemCraftingRecipes(itemName)[0][0]).map(([key, value]) => `${key}: ${value}`).join(', ')}.`);
+        const inventory = world.getInventoryCounts(bot);
+        const bestRecipe = mc.getItemCraftingRecipes(itemName, inventory)?.[0]?.[0] || {};
+        const missing = Object.entries(bestRecipe)
+            .filter(([key, value]) => (inventory[key] || 0) < value)
+            .map(([key, value]) => `${key}: ${value - (inventory[key] || 0)}`)
+            .join(', ');
+        log(bot, `You do not have the resources to craft a ${itemName}. Missing for the best inventory-compatible recipe: ${missing || 'unknown ingredients'}. Wood variants such as oak_planks and spruce_planks are interchangeable only when the recipe supports the wood tag.`);
         if (placedTable) {
             await collectBlock(bot, 'crafting_table', 1);
         }

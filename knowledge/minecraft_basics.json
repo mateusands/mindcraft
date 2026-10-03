@@ -1,0 +1,242 @@
+[
+  {
+    "id": "first-day-priorities",
+    "category": "progression",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/how-survive-your-first-night-minecraft",
+    "keywords": "primeiro dia primeira noite início start madeira comida abrigo cama tocha carvão sobrevivência",
+    "text": "Primeiro dia: consiga madeira, faça tábuas, gravetos, bancada e ferramentas básicas; obtenha comida; recolha pedra e carvão; prepare fornalha, tochas e um abrigo antes da noite. Se houver ovelhas, uma cama permite atravessar a noite e define o ponto de renascimento. Priorize sobreviver em vez de explorar longe sem recursos."
+  },
+  {
+    "id": "progression",
+    "category": "progression",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/how-minecraft",
+    "keywords": "começar progresso madeira tábua graveto bancada pedra fornalha ferro diamante sequência requisito",
+    "text": "Progressão inicial segura: troncos → tábuas, gravetos e bancada → picareta de madeira → pedra e fornalha → picareta de pedra → minério de ferro → fundir ferro → picareta, escudo e balde de ferro → diamante. Antes de buscar um recurso, produza primeiro a ferramenta capaz de coletá-lo."
+  },
+  {
+    "id": "wood-equivalence",
+    "category": "crafting",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/how-craft",
+    "keywords": "madeira carvalho oak pinheiro spruce bétula birch selva jungle acácia cherry mangue bamboo tábua plank graveto stick bancada baú receita variante substituir",
+    "text": "Receitas genéricas como gravetos, bancada, baú e ferramentas de madeira aceitam tábuas de qualquer espécie compatível. Spruce/pinheiro não precisa virar oak/carvalho. Uma receita exibindo oak_planks pode ser apenas uma variante: use a madeira disponível no inventário e consulte as receitas realmente craftáveis antes de declarar que falta carvalho."
+  },
+  {
+    "id": "crafting-workstations",
+    "category": "crafting",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/how-craft",
+    "keywords": "craft receita bancada crafting table forno furnace alto-forno blast furnace defumador smoker cortador stonecutter estação",
+    "text": "A grade do inventário é 2×2 e serve para receitas simples; ferramentas e muitas receitas exigem bancada 3×3. Fornalha funde minérios e cozinha; alto-forno processa minérios e equipamento metálico mais rápido; defumador cozinha comida mais rápido; cortador de pedra economiza escolhas e simplifica receitas de blocos de pedra."
+  },
+  {
+    "id": "tool-choice",
+    "category": "tools",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/how-minecraft",
+    "keywords": "ferramenta rápido machado axe pá shovel picareta pickaxe enxada hoe tesoura shears tronco terra areia cascalho argila pedra minério folha lã",
+    "text": "Use machado para troncos e blocos de madeira; pá para terra, areia, cascalho, argila e neve; picareta para pedra e minérios; enxada para blocos agrícolas e folhas quando aplicável; tesoura para lã, folhas, teias e vinhas. Algumas coletas funcionam à mão, mas a ferramenta correta reduz muito o tempo."
+  },
+  {
+    "id": "mining-tiers",
+    "category": "mining",
+    "version_scope": "Java moderna",
+    "source_url": "https://minecraft.wiki/w/Pickaxe",
+    "keywords": "nível coleta harvest minério carvão copper ferro diamond diamante ouro gold redstone esmeralda obsidiana ancient debris picareta pegar quebrar requisito ferramenta preciso antes",
+    "text": "Níveis de coleta: pedra ou melhor coleta ferro, cobre, lápis-lazúli e carvão; ferro ou melhor coleta diamante, ouro, redstone e esmeralda; diamante ou netherita coleta obsidiana e detritos ancestrais. Uma ferramenta fraca pode destruir o bloco sem soltar o recurso, portanto confirme o tier antes de minerar."
+  },
+  {
+    "id": "ore-levels-modern",
+    "category": "mining",
+    "version_scope": "Java 1.18+; distribuição pode mudar",
+    "source_url": "https://minecraft.wiki/w/Tutorial:Mining",
+    "keywords": "altura camada y diamante redstone ferro carvão cobre ouro esmeralda ancient debris minério distribuição coordenada",
+    "text": "Distribuição moderna: diamante e redstone ficam mais comuns perto de Y -58/-59, mas há lava profunda; ferro é forte perto de Y 16 e também em montanhas altas; carvão é abundante em altitude; cobre favorece cerca de Y 48 e cavernas de espeleotema; esmeralda aparece em montanhas; detritos ancestrais são procurados com frequência perto de Y 15 no Nether."
+  },
+  {
+    "id": "cave-preparation",
+    "category": "mining",
+    "version_scope": "Java moderna",
+    "source_url": "https://minecraft.wiki/w/Tutorial:Mining",
+    "keywords": "caverna explorar preparo tocha comida blocos balde água picareta reserva inventário",
+    "text": "Antes de entrar numa caverna, leve comida, tochas, blocos comuns, armas, uma picareta reserva e espaço no inventário. Quando já houver ferro, leve escudo e balde de água. Ilumine a rota, marque bifurcações e preserve uma saída. Volte para guardar itens valiosos antes que o risco supere o ganho."
+  },
+  {
+    "id": "mining-safety",
+    "category": "mining",
+    "version_scope": "Java moderna",
+    "source_url": "https://minecraft.wiki/w/Tutorial:Mining",
+    "keywords": "mineração segurança cavar baixo cima lava cascalho areia túnel escada água queda",
+    "text": "Nunca cave reto para baixo ou para cima: pode haver lava, queda, água, cascalho ou areia. Ao descer, faça escada ou túnel seguro. Ao ouvir lava, cave lateralmente e exponha a área com cuidado. Bloqueie fluxos com blocos e use água no Overworld para apagar fogo, criar obsidiana e amortecer quedas."
+  },
+  {
+    "id": "branch-mining",
+    "category": "mining",
+    "version_scope": "Java 1.18+",
+    "source_url": "https://minecraft.wiki/w/Tutorial:Mining",
+    "keywords": "branch mining mineração galeria túnel eficiência diamante veio espaçamento explorar caverna",
+    "text": "Para mineração controlada, abra um túnel principal e ramificações espaçadas que revelem blocos novos sem repetir a mesma área. Cavernas expõem muitos blocos rapidamente, mas são perigosas; túneis são mais lentos e previsíveis. Para diamante profundo, combine exploração de cavernas com túneis perto das camadas inferiores e mantenha atenção à lava."
+  },
+  {
+    "id": "planning-prerequisites",
+    "category": "planning",
+    "version_scope": "todas",
+    "source_url": "https://www.minecraft.net/en-us/article/how-craft",
+    "keywords": "pegar conseguir coletar craft fabricar plano requisito falta inventário ferramenta etapa verificar objetivo",
+    "text": "Antes de agir, confira inventário, arredores, ferramenta necessária e materiais predecessores. Divida metas em pré-requisitos executáveis. Após cada etapa, confirme o resultado no inventário ou no mundo; não anuncie sucesso antes da confirmação. Se falhar, leia o erro, atualize o estado e escolha outra receita, bloco ou rota em vez de repetir cegamente."
+  },
+  {
+    "id": "inventory-discipline",
+    "category": "planning",
+    "version_scope": "todas",
+    "source_url": "https://www.minecraft.net/en-us/article/exploring-minecraft",
+    "keywords": "inventário cheio organizar guardar baú valioso descarte stack viagem exploração recurso",
+    "text": "Antes de uma viagem, guarde itens que não serão usados e mantenha espaço para o objetivo. Preserve comida, madeira, tochas, ferramentas e blocos utilitários. Ao encontrar recursos raros, considere retornar ao baú em vez de continuar com inventário cheio. Não descarte materiais de progressão para recolher blocos comuns."
+  },
+  {
+    "id": "health-hunger",
+    "category": "survival",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/health-minecraft",
+    "keywords": "vida health fome hunger regenerar comida dano morrer sprint comer coração",
+    "text": "Fome baixa impede corrida e pode levar à perda de vida; com pelo menos nove ícones de fome, a vida regenera naturalmente. Coma antes de combate, mineração longa ou exploração. Tomar dano isolado não significa abandonar a tarefa: estabilize, afaste-se da ameaça, coma quando seguro e retome somente com vida suficiente."
+  },
+  {
+    "id": "food-priorities",
+    "category": "survival",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/exploring-minecraft",
+    "keywords": "comida food cozinhar carne pão batata cenoura fome exploração fornalha cru podre",
+    "text": "Para viagens, prefira comida cozida ou alimentos com boa reposição, como carne cozida, pão e batata assada. Cozinhar carne melhora seu valor alimentar. Monte uma fonte renovável cedo: trigo para pão e reprodução, batata/cenoura para plantio ou animais cercados. Guarde comida no atalho e não dependa de carne podre, que pode causar fome."
+  },
+  {
+    "id": "lighting-shelter-spawn",
+    "category": "survival",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/how-survive-your-first-night-minecraft",
+    "keywords": "tocha luz escuro monstro spawn abrigo porta cama renascimento noite carvão vegetal",
+    "text": "Ilumine abrigo, entrada e rotas para reduzir áreas escuras onde hostis aparecem. Tochas usam graveto com carvão ou carvão vegetal. Feche o abrigo e evite aberturas acessíveis. Dormir numa cama no Overworld atravessa a noite e define o renascimento; confirme o novo ponto antes de viajar longe."
+  },
+  {
+    "id": "combat-basics",
+    "category": "combat",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/how-minecraft",
+    "keywords": "combate attack espada axe arco cooldown distância crítico armadura recuar inimigo",
+    "text": "No combate Java, ataques têm recarga: golpes bem temporizados causam mais dano do que clicar sem parar. Evite enfrentar vários hostis ao mesmo tempo, mantenha rota de recuo e use terreno ou blocos para separar inimigos. Espada é consistente contra grupos; arco resolve ameaças à distância; armadura reduz o risco, mas não substitui comida e cautela."
+  },
+  {
+    "id": "shield-usage",
+    "category": "combat",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/exploring-minecraft",
+    "keywords": "escudo shield skeleton esqueleto flecha creeper bloquear ferro madeira defesa",
+    "text": "Um escudo custa pouco ferro e madeira e é uma das melhores melhorias iniciais. Levantado na direção correta, bloqueia muitos ataques frontais e projéteis, sendo especialmente útil contra esqueletos. Não fique cercado: o escudo protege uma direção, reduz mobilidade enquanto usado e pode ser temporariamente desativado por certos ataques de machado."
+  },
+  {
+    "id": "mob-tactics",
+    "category": "combat",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/how-survive-your-first-night-minecraft",
+    "keywords": "creeper skeleton esqueleto zombie zumbi spider aranha enderman mob tática explosão flecha olhar",
+    "text": "Creeper: mantenha distância, ataque e recue, sem deixá-lo explodir perto de baús ou construções. Esqueleto: use escudo, cobertura e aproximação lateral. Zumbis podem chamar reforços; evite grupos. Aranhas escalam paredes. Enderman normalmente não deve ser encarado nos olhos; água e abrigo de dois blocos de altura ajudam a escapar."
+  },
+  {
+    "id": "navigation-exploration",
+    "category": "exploration",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/exploring-minecraft",
+    "keywords": "explorar navegação coordenadas xyz mapa bússola base perder voltar marcar caminho viagem",
+    "text": "Antes de explorar longe, registre as coordenadas da base e, se possível, leve mapa ou bússola. A bússola comum aponta para o spawn do mundo, não necessariamente para a cama ou base. Marque rotas com sinais, tochas ou blocos consistentes e anote portais. Leve comida, cama, blocos, ferramentas e espaço livre."
+  },
+  {
+    "id": "farming-basics",
+    "category": "farming",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/minecraft-tips-for-beginners",
+    "keywords": "fazenda farm trigo wheat semente batata cenoura água enxada luz colher replantar animal",
+    "text": "Para uma fonte renovável de comida, use enxada na terra, mantenha a plantação próxima de água e com luz, plante sementes/trigo, batatas ou cenouras e replante após colher. Trigo também reproduz vacas e ovelhas; cenouras reproduzem porcos. Não consuma toda a colheita: reserve unidades para replantio e reprodução."
+  },
+  {
+    "id": "smelting-fuel",
+    "category": "crafting",
+    "version_scope": "Java moderna",
+    "source_url": "https://minecraft.wiki/w/Smelting",
+    "keywords": "fornalha furnace fundir smelt combustível fuel carvão charcoal balde lava minério ferro comida eficiência",
+    "text": "Planeje lotes de fornalha para não desperdiçar combustível. Carvão e carvão vegetal são opções práticas; madeira pode servir em emergência; balde de lava processa um lote grande, mas o balde deve ser preservado. Alto-forno funde minérios mais rápido e defumador cozinha comida mais rápido, embora ambos consumam combustível na mesma proporção temporal acelerada."
+  },
+  {
+    "id": "enchantment-priorities",
+    "category": "enchanting",
+    "version_scope": "Java moderna",
+    "source_url": "https://help.minecraft.net/hc/en-us/articles/360058730912",
+    "keywords": "encantamento enchanting mending remendo unbreaking inquebrável efficiency eficiência protection proteção sharpness afiação ferramenta armadura",
+    "text": "Prioridades úteis: Eficiência acelera ferramentas; Inquebrável aumenta sua duração; Remendo usa experiência para reparar equipamento; Proteção melhora sobrevivência; Afiação aumenta dano de espada. Preserve equipamentos valiosos antes de quebrar e combine encantamentos compatíveis com cuidado, pois níveis e trabalhos sucessivos em bigorna aumentam o custo."
+  },
+  {
+    "id": "fortune-vs-silk-touch",
+    "category": "enchanting",
+    "version_scope": "Java moderna",
+    "source_url": "https://help.minecraft.net/hc/en-us/articles/360058730912",
+    "keywords": "fortune fortuna silk touch toque suave minério diamante diamantes conseguir mais multiplicar drops redstone carvão bloco encantamento incompatível",
+    "text": "Fortuna aumenta a quantidade ou chance de certas gotas, sendo valiosa para diamante, carvão, redstone e outros recursos compatíveis. Toque Suave faz muitos blocos caírem no próprio formato, útil para transportar minérios e blocos especiais. Os dois são incompatíveis na mesma ferramenta; escolha conforme a meta e guarde uma picareta de cada tipo no fim do jogo."
+  },
+  {
+    "id": "villager-trading",
+    "category": "trading",
+    "version_scope": "Java moderna; ofertas variam",
+    "source_url": "https://minecraft.wiki/w/Tutorial:Trading",
+    "keywords": "aldeão villager troca trade esmeralda profissão bibliotecário mending remendo flecheiro graveto agricultor papel oferta",
+    "text": "Trocas com aldeões podem fornecer comida, ferramentas de diamante, mapas e livros encantados. Bibliotecários são importantes para encantamentos; flecheiros podem comprar gravetos; fazendeiros compram plantações. Antes da primeira troca, remover e recolocar a estação pode alterar ofertas; depois de negociar, profissão e ofertas ficam travadas. Proteja aldeões e suas estações."
+  },
+  {
+    "id": "nether-preparation",
+    "category": "nether",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/the-nether-update-here",
+    "keywords": "nether portal entrar levar preparar lidar obsidiana pederneira fogo lava ghast comida armadura ouro coordenadas",
+    "text": "Antes do Nether, leve armadura, escudo, arco, comida, blocos não inflamáveis, pederneira e aço e materiais para marcar/proteger o portal. Água comum evapora no Nether, então não conte com balde de água. Registre as coordenadas do portal, construa abrigo ao redor dele e evite pontes estreitas sem proteção sobre lava."
+  },
+  {
+    "id": "piglin-safety",
+    "category": "nether",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/meet-piglins",
+    "keywords": "piglin ouro gold armor armadura baú chest minerar barter troca bastion brute nether",
+    "text": "Use pelo menos uma peça de armadura de ouro para reduzir a hostilidade de piglins comuns. Mesmo assim, abrir recipientes ou minerar ouro perto deles pode irritá-los. Lingotes de ouro servem para escambo com recompensas aleatórias. Piglin Brute ataca independentemente da armadura de ouro; em bastiões, avance devagar e prepare rota de fuga."
+  },
+  {
+    "id": "blaze-brewing",
+    "category": "nether",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/health-minecraft",
+    "keywords": "blaze vara blaze rod pó brewing stand poção nether wart fortaleza olho ender fogo",
+    "text": "Fortalezas do Nether fornecem blaze rods: elas criam suporte de poções, viram blaze powder para combustível de alquimia e participam dos olhos do End. Contra blazes, use cobertura e combate à distância quando possível. Para poções comuns, comece com frascos de água, Nether wart e blaze powder; resistência ao fogo reduz muito o risco no Nether."
+  },
+  {
+    "id": "netherite-upgrade",
+    "category": "nether",
+    "version_scope": "Java 1.20+",
+    "source_url": "https://minecraft.wiki/w/Netherite_Upgrade",
+    "keywords": "netherite detrito ancestral ancient debris sucata scrap ouro ingot template molde ferraria bastion diamante upgrade",
+    "text": "Para netherita moderna: minere detritos ancestrais com picareta de diamante ou netherita, funda-os em sucata, combine quatro sucatas com quatro lingotes de ouro para um lingote de netherita e use mesa de ferraria. Desde Java 1.20, o upgrade também exige um molde Netherite Upgrade encontrado em bastiões; preserve e duplique o molde antes de vários upgrades."
+  },
+  {
+    "id": "end-preparation",
+    "category": "end",
+    "version_scope": "Java moderna",
+    "source_url": "https://minecraft.wiki/w/Tutorial:End_survival",
+    "keywords": "end dragão ender dragon olho ender arco flecha bloco água abóbora cama explosão preparo",
+    "text": "Para o End, leve boa armadura, arco e flechas, comida, blocos, picareta e balde de água. Destrua cristais de cura com cautela e evite olhar para endermen. Água ajuda contra endermen e quedas. Camas explodem no End: não tente dormir. Só entre quando estiver preparado para recuperar ou perder o equipamento."
+  },
+  {
+    "id": "hazard-recovery",
+    "category": "survival",
+    "version_scope": "Java moderna",
+    "source_url": "https://www.minecraft.net/en-us/article/health-minecraft",
+    "keywords": "perigo lava fogo afogar queda cascalho sufocar veneno recuar recuperar item morte",
+    "text": "Ao pegar fogo, sair da fonte e entrar em água no Overworld é prioridade. Ao afogar, suba antes de terminar o ar. Em queda, água, feno ou terreno em degraus podem reduzir risco quando disponíveis. Se vida estiver crítica, interrompa coleta, crie distância, bloqueie a ameaça e coma; não corra de forma aleatória para outra área perigosa."
+  }
+]

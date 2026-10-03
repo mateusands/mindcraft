@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, mkdirSync, existsSync, renameSync } from 'fs';
 import { NPCData } from './npc/data.js';
 import settings from './settings.js';
 
@@ -7,10 +7,12 @@ export class History {
     constructor(agent) {
         this.agent = agent;
         this.name = agent.name;
-        this.memory_fp = `./bots/${this.name}/memory.json`;
-        this.full_history_fp = undefined;
+        this.scope = settings.memory_scope || 'default';
+        this.world_dir = `./bots/${this.name}/worlds/${this.scope}`;
+        this.memory_fp = `${this.world_dir}/memory.json`;
+        this.full_history_fp = `${this.world_dir}/history.json`;
 
-        mkdirSync(`./bots/${this.name}/histories`, { recursive: true });
+        mkdirSync(this.world_dir, { recursive: true });
 
         this.turns = [];
 
@@ -43,9 +45,7 @@ export class History {
     }
 
     async appendFullHistory(to_store) {
-        if (this.full_history_fp === undefined) {
-            const string_timestamp = new Date().toLocaleString().replace(/[/:]/g, '-').replace(/ /g, '').replace(/,/g, '_');
-            this.full_history_fp = `./bots/${this.name}/histories/${string_timestamp}.json`;
+        if (!existsSync(this.full_history_fp)) {
             writeFileSync(this.full_history_fp, '[]', 'utf8');
         }
         try {
@@ -89,7 +89,9 @@ export class History {
                 taskStart: this.agent.task.taskStartTime,
                 last_sender: this.agent.last_sender
             };
-            writeFileSync(this.memory_fp, JSON.stringify(data, null, 2));
+            const temporaryPath = `${this.memory_fp}.tmp`;
+            writeFileSync(temporaryPath, JSON.stringify(data, null, 2));
+            renameSync(temporaryPath, this.memory_fp);
             console.log('Saved memory to:', this.memory_fp);
         } catch (error) {
             console.error('Failed to save history:', error);
@@ -100,13 +102,13 @@ export class History {
     load() {
         try {
             if (!existsSync(this.memory_fp)) {
-                console.log('No memory file found.');
+                console.log(`No memory file found for world scope: ${this.scope}`);
                 return null;
             }
             const data = JSON.parse(readFileSync(this.memory_fp, 'utf8'));
             this.memory = data.memory || '';
             this.turns = data.turns || [];
-            console.log('Loaded memory:', this.memory);
+            console.log(`Loaded memory for world scope ${this.scope}:`, this.memory);
             return data;
         } catch (error) {
             console.error('Failed to load history:', error);

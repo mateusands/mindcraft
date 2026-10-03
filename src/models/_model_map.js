@@ -34,6 +34,7 @@ export function selectAPI(profile) {
     if (typeof profile === 'string' || profile instanceof String) {
         profile = {model: profile};
     }
+    const apiWasExplicit = Boolean(profile.api);
     // backwards compatibility with local->ollama
     if (profile.api?.includes('local') || profile.model?.includes('local')) {
         profile.api = 'ollama';
@@ -70,7 +71,13 @@ export function selectAPI(profile) {
     if (!apiMap[profile.api]) {
         throw new Error('Unknown api:', profile.api);
     }
-    let model_name = profile.model.replace(profile.api + '/', ''); // remove prefix
+    // NVIDIA's own catalog IDs legitimately begin with `nvidia/` (for
+    // example nvidia/nemotron-3-embed-1b). Preserve that publisher prefix
+    // when the API was supplied explicitly; inferred shorthand still strips
+    // the API prefix as before.
+    let model_name = apiWasExplicit && profile.api === 'nvidia'
+        ? profile.model
+        : profile.model.replace(profile.api + '/', '');
     profile.model = model_name === "" ? null : model_name; // if model is empty, set to null
     return profile;
 }

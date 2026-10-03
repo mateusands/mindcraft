@@ -1,7 +1,7 @@
 const settings = {
     "minecraft_version": "auto", // or specific version like "1.21.6"
     "host": "127.0.0.1", // or "localhost", "your.ip.address.here"
-    "port": 55916, // set to -1 to automatically scan for open ports
+    "port": 45975, // set to -1 to automatically scan for open ports
     "auth": "offline", // or "microsoft"
 
     // the mindserver manages all agents and hosts the UI
@@ -26,7 +26,9 @@ const settings = {
         // individual profiles override values from the base profile
     ],
 
-    "load_memory": false, // load memory from previous session
+    "load_memory": true, // load memory only from the current Minecraft world/save
+    "memory_world_id": "auto", // auto = newest local save; set a fixed name for remote servers
+    "minecraft_saves_path": "/home/mateuswzt/.local/share/PrismLauncher/instances",
     "init_message": "Respond with hello world and your name", // sends to all on spawn
     "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
 
@@ -45,6 +47,8 @@ const settings = {
     "blocked_actions" : ["!checkBlueprint", "!checkBlueprintLevel", "!getBlueprint", "!getBlueprintLevel"] , // commands to disable and remove from docs. Ex: ["!setMode"]
     "code_timeout_mins": -1, // minutes code is allowed to run. -1 for no timeout
     "relevant_docs_count": 5, // number of relevant code function docs to select for prompting. -1 for all
+    "relevant_knowledge_count": 3, // number of Minecraft knowledge notes retrieved for the current request
+    "knowledge_database": "./bots/shared/minecraft_knowledge.sqlite", // hybrid SQLite FTS5 + sqlite-vec RAG index
 
     "max_messages": 15, // max number of messages to keep in context
     "num_examples": 2, // number of examples to give to the model
@@ -55,6 +59,8 @@ const settings = {
 
     "spawn_timeout": 30, // num seconds allowed for the bot to spawn before throwing error. Increase when spawning takes a while.
     "block_place_delay": 0, // delay between placing blocks (ms) if using newAction. helps avoid bot being kicked by anti-cheat mechanisms on servers.
+    "position_packet_throttle_ms": 0, // keep 0 for vanilla/LAN; only raise for a server that rate-limits movement packets
+    "escape_on_damage": false, // do not trigger a long panic sprint after taking damage
   
     "log_all_prompts": false, // log ALL prompts to file
 };

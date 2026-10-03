@@ -68,6 +68,8 @@ You can configure the agent's name, model, and prompts in their profile like `an
 | `mistral` | `MISTRAL_API_KEY` | [docs](https://docs.mistral.ai/getting-started/models/models_overview/) |
 | `replicate` | `REPLICATE_API_KEY` | [docs](https://replicate.com/collections/language-models) |
 | `groq` (not grok) | `GROQCLOUD_API_KEY` | [docs](https://console.groq.com/docs/models) |
+| `nvidia` | `NVIDIA_API_KEY` | [docs](https://build.nvidia.com/explore/discover) |
+| `mimo` | `MIMO_API_KEY` | [docs](https://platform.xiaomimimo.com/) |
 | `huggingface` | `HUGGINGFACE_API_KEY` | [docs](https://huggingface.co/models) |
 | `novita` | `NOVITA_API_KEY` | [docs](https://novita.ai/model-api/product/llm-api?utm_source=github_mindcraft&utm_medium=github_readme&utm_campaign=link) |
 | `openrouter` | `OPENROUTER_API_KEY` | [docs](https://openrouter.ai/models) |
@@ -202,13 +204,22 @@ The `model` field can be a string or an object. A model object must specify an `
 
 `model` is used for chat, `code_model` is used for newAction coding, `vision_model` is used for image interpretation, `embedding` is used to embed text for example selection, and `speak_model` is used for voice synthesis. `model` will be used by default for all other models if not specified. Not all APIs support embeddings, vision, or voice synthesis.
 
+`fallback_models` optionally defines an ordered provider chain. Each entry accepts `rpm`, `timeout_ms`, and `cooldown_ms`; the router skips a provider near its configured rate limit or while its circuit is open. Machine-wide `NVIDIA_API_KEY` and `MIMO_API_KEY` values may also be read from the permission-600 CrewKit credential store, so secrets do not need to be copied into this repository.
+
 All apis have default models and urls, so those fields are optional. The `params` field is optional and can be used to specify additional parameters for the model. It accepts any key-value pairs supported by the api. Is not supported for embedding models.
 
 ## Embedding Models
 
 Embedding models are used to embed and efficiently select relevant examples for conversation and coding.
 
-Supported Embedding APIs: `openai`, `google`, `replicate`, `huggingface`, `novita`
+Supported Embedding APIs: `openai`, `google`, `replicate`, `huggingface`, `novita`, `nvidia`
+
+Minecraft gameplay knowledge lives in `knowledge/minecraft_basics.json`. Each
+chunk has a stable `id`, `category`, `version_scope`, `source_url`, retrieval
+`keywords`, and concise `text` for the model. At startup Mindcraft updates a
+hybrid SQLite FTS5 + sqlite-vec index, re-embedding only chunks whose content
+changed. Keep tips small and task-oriented so retrieval adds relevant facts
+without flooding the model context.
 
 If you try to use an unsupported model, then it will default to a simple word-overlap method. Expect reduced performance. We recommend using supported embedding APIs.
 

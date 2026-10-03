@@ -67,35 +67,44 @@ export function initBot(username) {
 
     const bot = createBot(options);
 
-    // Throttle position packets to avoid kicks on Paper/Spigot servers
-    // Paper enforces stricter packet rate limits than vanilla, causing ECONNRESET
-    // when mineflayer sends position updates faster than 50ms apart
-    let lastPositionUpdate = 0;
-    let pendingPositionPacket = null;
-    const POSITION_THROTTLE_MS = 50;
-    const originalWrite = bot._client.write.bind(bot._client);
-    bot._client.write = function(name, data) {
-        if (name === 'position' || name === 'position_look' || name === 'look') {
-            const now = Date.now();
-            if (now - lastPositionUpdate < POSITION_THROTTLE_MS) {
-                // Queue this packet so the last position update is never lost
-                if (!pendingPositionPacket) {
-                    pendingPositionPacket = setTimeout(() => {
-                        pendingPositionPacket = null;
-                        lastPositionUpdate = Date.now();
-                        originalWrite(name, data);
-                    }, POSITION_THROTTLE_MS - (now - lastPositionUpdate));
+    // Optional workaround for servers with strict movement packet rate limits.
+    // It is disabled for vanilla/LAN because delaying a packet until after
+    // knockback can make the server reject it as an invalid player movement.
+    const positionThrottleMs = Number(settings.position_packet_throttle_ms || 0);
+    if (positionThrottleMs > 0) {
+        let lastPositionUpdate = 0;
+        let pendingPositionPacket = null;
+        let pendingPositionData = null;
+        const originalWrite = bot._client.write.bind(bot._client);
+        bot._client.write = function(name, data) {
+            if (name === 'position' || name === 'position_look' || name === 'look') {
+                const now = Date.now();
+                const remaining = positionThrottleMs - (now - lastPositionUpdate);
+                if (remaining > 0) {
+                    pendingPositionData = { name, data }; // always keep the newest position
+                    if (!pendingPositionPacket) {
+                        pendingPositionPacket = setTimeout(() => {
+                            const packet = pendingPositionData;
+                            pendingPositionPacket = null;
+                            pendingPositionData = null;
+                            if (packet && !bot._client.ended) {
+                                lastPositionUpdate = Date.now();
+                                originalWrite(packet.name, packet.data);
+                            }
+                        }, remaining);
+                    }
+                    return;
                 }
-                return;
+                lastPositionUpdate = now;
             }
-            lastPositionUpdate = now;
-            if (pendingPositionPacket) {
-                clearTimeout(pendingPositionPacket);
-                pendingPositionPacket = null;
-            }
-        }
-        return originalWrite(name, data);
-    };
+            return originalWrite(name, data);
+        };
+        bot._client.once('end', () => {
+            if (pendingPositionPacket) clearTimeout(pendingPositionPacket);
+            pendingPositionPacket = null;
+            pendingPositionData = null;
+        });
+    }
 
     // Suppress PartialReadError for non-critical packets
     // Paper servers sometimes send packets that node-minecraft-protocol
@@ -243,7 +252,44 @@ export function getAllBiomes() {
     return mcdata.biomes;
 }
 
-export function getItemCraftingRecipes(itemName) {
+function recipeInventoryScore(recipe, inventory) {
+    let score = 0;
+    for (const [ingredientName, required] of Object.entries(recipe)) {
+        const exact = inventory[ingredientName] || 0;
+        score += Math.min(exact, required) * 100;
+
+        // minecraft-data expands tag-based wood recipes into one recipe per
+        // species. Prefer the species the bot already owns or can turn into
+        // planks instead of always suggesting oak.
+        if (ingredientName.endsWith('_planks')) {
+            const wood = ingredientName.slice(0, -'_planks'.length);
+            const matchingWood = [
+                `${wood}_log`,
+                `${wood}_wood`,
+                `stripped_${wood}_log`,
+                `stripped_${wood}_wood`,
+                wood === 'bamboo' ? 'bamboo' : null
+            ].filter(Boolean);
+            const convertible = matchingWood.reduce((total, name) => total + (inventory[name] || 0), 0);
+            score += Math.min(convertible * 4, required) * 10;
+        }
+    }
+    return score;
+}
+
+export function sortRecipesByInventory(recipes, inventory = {}) {
+    const commonItems = ['oak_planks', 'oak_log', 'coal', 'cobblestone'];
+    return recipes.sort((a, b) => {
+        const inventoryDifference = recipeInventoryScore(b[0], inventory) - recipeInventoryScore(a[0], inventory);
+        if (inventoryDifference !== 0) return inventoryDifference;
+
+        const commonCountA = Object.keys(a[0]).filter(key => commonItems.includes(key)).reduce((acc, key) => acc + a[0][key], 0);
+        const commonCountB = Object.keys(b[0]).filter(key => commonItems.includes(key)).reduce((acc, key) => acc + b[0][key], 0);
+        return commonCountB - commonCountA;
+    });
+}
+
+export function getItemCraftingRecipes(itemName, currentInventory = {}) {
     let itemId = getItemId(itemName);
     if (!mcdata.recipes[itemId]) {
         return null;
@@ -270,15 +316,7 @@ export function getItemCraftingRecipes(itemName) {
             {craftedCount : r.result.count}
         ]);
     }
-    // sort recipes by if their ingredients include common items
-    const commonItems = ['oak_planks', 'oak_log', 'coal', 'cobblestone'];
-    recipes.sort((a, b) => {
-        let commonCountA = Object.keys(a[0]).filter(key => commonItems.includes(key)).reduce((acc, key) => acc + a[0][key], 0);
-        let commonCountB = Object.keys(b[0]).filter(key => commonItems.includes(key)).reduce((acc, key) => acc + b[0][key], 0);
-        return commonCountB - commonCountA;
-    });
-
-    return recipes;
+    return sortRecipesByInventory(recipes, currentInventory);
 }
 
 export function isSmeltable(itemName) {
@@ -511,7 +549,11 @@ function craftItem(item, count, inventory, leftovers, crafted = { required: {}, 
         return crafted;
     }
 
-    const recipe = getItemCraftingRecipes(item)?.[0];
+    const availableItems = { ...inventory };
+    for (const [leftoverName, leftoverCount] of Object.entries(leftovers)) {
+        availableItems[leftoverName] = (availableItems[leftoverName] || 0) + leftoverCount;
+    }
+    const recipe = getItemCraftingRecipes(item, availableItems)?.[0];
     if (!recipe) {
         crafted.required[item] = stillNeeded;
         return crafted;
@@ -559,7 +601,7 @@ function formatPlan(targetItem, { required, steps, leftovers }) {
     lines.push(...steps);
 
     if (Object.keys(required).some(item => item.includes('oak')) && !targetItem.includes('oak')) {
-        lines.push('Note: Any varient of wood can be used for this recipe.');
+        lines.push('IMPORTANT: Oak is only an example here. Any matching wood species can be used; prefer the logs or planks already in inventory (for example spruce_planks).');
     }
 
     if (Object.keys(leftovers).length > 0) {

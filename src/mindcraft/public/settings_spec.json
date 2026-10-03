@@ -34,7 +34,17 @@
     "load_memory": {
         "type": "boolean",
         "description": "Whether to load bot's previous memory",
-        "default": false
+        "default": true
+    },
+    "memory_world_id": {
+        "type": "string",
+        "description": "Stable memory namespace. Use auto to detect the newest local save.",
+        "default": "auto"
+    },
+    "minecraft_saves_path": {
+        "type": "string",
+        "description": "Path containing local Minecraft saves, used for automatic per-world memory.",
+        "default": ""
     },
     "init_message": {
         "type": "string",
@@ -70,6 +80,16 @@
         "type": "number",
         "description": "Number of relevant function documents to include in the prompt for LLM code writing",
         "default": 5
+    },
+    "relevant_knowledge_count": {
+        "type": "number",
+        "description": "Number of Minecraft knowledge notes retrieved for the current request",
+        "default": 3
+    },
+    "knowledge_database": {
+        "type": "string",
+        "description": "Path to the SQLite + sqlite-vec Minecraft knowledge index",
+        "default": "./bots/shared/minecraft_knowledge.sqlite"
     },
     "max_messages": {
         "type": "number",
@@ -136,5 +156,15 @@
         "type": "number",
         "description": "Number of seconds allowed for the bot to spawn before throwing an error. Increase when spawning takes a while.",
         "default": 30
+    },
+    "position_packet_throttle_ms": {
+        "type": "number",
+        "description": "Optional movement packet throttle for strict servers. Keep 0 for vanilla/LAN.",
+        "default": 0
+    },
+    "escape_on_damage": {
+        "type": "boolean",
+        "description": "Whether critically low health triggers an automatic long escape movement.",
+        "default": true
     }
 }

@@ -1,6 +1,7 @@
 import { createMindServer, registerAgent, numStateListeners } from './mindserver.js';
 import { AgentProcess } from '../process/agent_process.js';
 import { getServer } from './mcserver.js';
+import { resolveMemoryScope } from '../utils/memory_scope.js';
 import open from 'open';
 
 let mindserver;
@@ -39,7 +40,6 @@ export async function createAgent(settings) {
     let agent_name = settings.profile.name;
     const agentIndex = agent_count++;
     const viewer_port = 3000 + agentIndex;
-    registerAgent(settings, viewer_port);
     let load_memory = settings.load_memory || false;
     let init_message = settings.init_message || null;
 
@@ -49,13 +49,19 @@ export async function createAgent(settings) {
             settings.host = server.host;
             settings.port = server.port;
             settings.minecraft_version = server.version;
+            settings.server_name = server.name;
+            settings.memory_scope = resolveMemoryScope(settings, server);
         } catch (error) {
             console.warn(`Error getting server:`, error);
             if (settings.minecraft_version === "auto") {
                 settings.minecraft_version = null;
             }
             console.warn(`Attempting to connect anyway...`);
+            settings.memory_scope = resolveMemoryScope(settings);
         }
+
+        console.log(`Memory scope for ${agent_name}: ${settings.memory_scope}`);
+        registerAgent(settings, viewer_port);
 
         const agentProcess = new AgentProcess(agent_name, mindserver_port);
         agentProcess.start(load_memory, init_message, agentIndex);

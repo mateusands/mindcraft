@@ -2,6 +2,7 @@ import { readFileSync, mkdirSync, writeFileSync} from 'fs';
 import { Examples } from '../utils/examples.js';
 import { getCommandDocs } from '../agent/commands/index.js';
 import { SkillLibrary } from "../agent/library/skill_library.js";
+import { MinecraftKnowledge } from "../agent/library/minecraft_knowledge.js";
 import { stringifyTurns } from '../utils/text.js';
 import { getCommand } from '../agent/commands/index.js';
 import settings from '../agent/settings.js';
@@ -9,6 +10,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { selectAPI, createModel } from './_model_map.js';
+import { ModelRouter } from './model_router.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,11 +58,37 @@ export class Prompter {
         if (this.profile.max_tokens)
             max_tokens = this.profile.max_tokens;
 
-        let chat_model_profile = selectAPI(this.profile.model);
-        this.chat_model = createModel(chat_model_profile);
+        const prepareProfile = modelProfile => selectAPI(JSON.parse(JSON.stringify(modelProfile)));
+        let chat_model_profile = prepareProfile(this.profile.model);
+        const chatProviders = [this.profile.model, ...(this.profile.fallback_models || [])];
+        if (chatProviders.length > 1) {
+            this.chat_model = new ModelRouter(chatProviders.map((provider, index) => {
+                const prepared = prepareProfile(provider);
+                return {
+                    name: provider.name || `${prepared.api}/${prepared.model || 'default'}`,
+                    model: createModel(prepared),
+                    rpm: provider.rpm,
+                    timeout_ms: provider.timeout_ms,
+                    cooldown_ms: provider.cooldown_ms,
+                    priority: index
+                };
+            }), this.profile.model_router);
+        }
+        else {
+            this.chat_model = createModel(chat_model_profile);
+        }
+
+        if (this.profile.planner_model) {
+            const planner_model_profile = prepareProfile(this.profile.planner_model);
+            this.planner_model = createModel(planner_model_profile);
+        }
+        else {
+            this.planner_model = null;
+        }
+        this.current_plan = '';
 
         if (this.profile.code_model) {
-            let code_model_profile = selectAPI(this.profile.code_model);
+            let code_model_profile = prepareProfile(this.profile.code_model);
             this.code_model = createModel(code_model_profile);
         }
         else {
@@ -68,7 +96,7 @@ export class Prompter {
         }
 
         if (this.profile.vision_model) {
-            let vision_model_profile = selectAPI(this.profile.vision_model);
+            let vision_model_profile = prepareProfile(this.profile.vision_model);
             this.vision_model = createModel(vision_model_profile);
         }
         else {
@@ -79,7 +107,7 @@ export class Prompter {
         let embedding_model_profile = null;
         if (this.profile.embedding) {
             try {
-                embedding_model_profile = selectAPI(this.profile.embedding);
+                embedding_model_profile = prepareProfile(this.profile.embedding);
             } catch (e) {
                 embedding_model_profile = null;
             }
@@ -92,6 +120,14 @@ export class Prompter {
         }
 
         this.skill_libary = new SkillLibrary(agent, this.embedding_model);
+        let knowledgeEmbeddingModel = this.embedding_model;
+        if (this.profile.knowledge_embedding) {
+            knowledgeEmbeddingModel = createModel(prepareProfile(this.profile.knowledge_embedding));
+        }
+        this.minecraft_knowledge = new MinecraftKnowledge(knowledgeEmbeddingModel, {
+            databasePath: settings.knowledge_database,
+            embeddingModel: this.profile.knowledge_embedding?.model || this.profile.embedding?.model
+        });
         mkdirSync(`./bots/${name}`, { recursive: true });
         writeFileSync(`./bots/${name}/last_profile.json`, JSON.stringify(this.profile, null, 4), (err) => {
             if (err) {
@@ -118,7 +154,8 @@ export class Prompter {
             await Promise.all([
                 this.convo_examples.load(this.profile.conversation_examples),
                 this.coding_examples.load(this.profile.coding_examples),
-                this.skill_libary.initSkillLibrary()
+                this.skill_libary.initSkillLibrary(),
+                this.minecraft_knowledge.init()
             ]).catch(error => {
                 // Preserve error details
                 console.error('Failed to initialize examples. Error details:', error);
@@ -166,6 +203,19 @@ export class Prompter {
             prompt = prompt.replaceAll('$EXAMPLES', await examples.createExampleMessage(messages));
         if (prompt.includes('$MEMORY'))
             prompt = prompt.replaceAll('$MEMORY', this.agent.history.memory);
+        if (prompt.includes('$KNOWLEDGE')) {
+            const knowledgeQuery = messages ? stringifyTurns(messages.slice(-8)) : '';
+            prompt = prompt.replaceAll(
+                '$KNOWLEDGE',
+                await this.minecraft_knowledge.getRelevant(knowledgeQuery, settings.relevant_knowledge_count || 3)
+            );
+        }
+        if (prompt.includes('$PLAN')) {
+            const plan = this.current_plan
+                ? `### PLANO SUGERIDO PELO MODELO LOCAL (verifique antes de executar)\n${this.current_plan}`
+                : '';
+            prompt = prompt.replaceAll('$PLAN', plan);
+        }
         if (prompt.includes('$TO_SUMMARIZE'))
             prompt = prompt.replaceAll('$TO_SUMMARIZE', stringifyTurns(to_summarize));
         if (prompt.includes('$CONVO'))
@@ -215,6 +265,8 @@ export class Prompter {
         this.most_recent_msg_time = Date.now();
         let current_msg_time = this.most_recent_msg_time;
 
+        this.current_plan = await this.promptLocalPlan(messages);
+
         for (let i = 0; i < 3; i++) { // try 3 times to avoid hallucinations
             await this.checkCooldown();
             if (current_msg_time !== this.most_recent_msg_time) {
@@ -259,6 +311,28 @@ export class Prompter {
         }
 
         return '';
+    }
+
+    async promptLocalPlan(messages) {
+        if (!this.planner_model || !this.profile.planning) return '';
+
+        const latestRequest = messages?.slice().reverse().find(message => message.role !== 'assistant')?.content || '';
+        const actionWords = /\b(peg|colet|miner|cav|fa[cç]|constru|cri|plant|mate|ataque|siga|venha|v[aá]|explor|encontr|procure|craft|build|collect|mine|dig|find|follow|come|go|attack|plant|explore)\w*/i;
+        if (!actionWords.test(latestRequest)) return '';
+
+        try {
+            let prompt = await this.replaceStrings(this.profile.planning, messages);
+            let plan = await this.planner_model.sendRequest([], prompt);
+            if (typeof plan !== 'string') return '';
+            if (plan.includes('</think>')) plan = plan.split('</think>').pop();
+            plan = plan.trim();
+            if (!plan || plan === 'No response data.' || plan.includes('brain disconnected')) return '';
+            console.log('Local planner suggestion:', plan);
+            return plan.slice(0, 1800);
+        } catch (error) {
+            console.warn('Local planner unavailable; continuing with the primary model:', error.message);
+            return '';
+        }
     }
 
     async promptCoding(messages) {

@@ -1,5 +1,5 @@
 import Groq from 'groq-sdk'
-import { getKey } from '../utils/keys.js';
+import { getFirstKey } from '../utils/keys.js';
 
 // THIS API IS NOT TO BE CONFUSED WITH GROK!
 // Go to grok.js for that. :)
@@ -23,7 +23,12 @@ export class GroqCloudAPI {
         if (this.url)
             console.warn("Groq Cloud has no implementation for custom URLs. Ignoring provided URL.");
 
-        this.groq = new Groq({ apiKey: getKey('GROQCLOUD_API_KEY') });
+        this.groq = new Groq({
+            apiKey: getFirstKey('GROQ_API_KEY', 'GROQCLOUD_API_KEY'),
+            timeout: Number(this.params.request_timeout_ms || 3000),
+            maxRetries: 0
+        });
+        delete this.params.request_timeout_ms;
 
 
     }
@@ -31,8 +36,6 @@ export class GroqCloudAPI {
     async sendRequest(turns, systemMessage, stop_seq = null) {
         // Construct messages array
         let messages = [{"role": "system", "content": systemMessage}].concat(turns);
-
-        let res = null;
 
         try {
             console.log("Awaiting Groq response...");
@@ -56,19 +59,16 @@ export class GroqCloudAPI {
                 ...(this.params || {})
             });
 
-            res = completion.choices[0].message.content;
-
-            res = res.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+            const res = completion.choices?.[0]?.message?.content;
+            if (!res) throw new Error('Groq returned no text content.');
+            return res.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
         }
         catch(err) {
             if (err.message.includes("content must be a string")) {
-                res = "Vision is only supported by certain models.";
-            } else {
-                res = "My brain disconnected, try again.";
+                return "Vision is only supported by certain models.";
             }
-            console.log(err);
+            throw new Error(`Groq request failed: ${err.message}`, { cause: err });
         }
-        return res;
     }
 
     async sendVisionRequest(messages, systemMessage, imageBuffer) {
