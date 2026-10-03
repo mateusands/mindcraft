@@ -301,6 +301,10 @@ export class Prompter {
                 continue;
             }
 
+            if (/^NO_RESPONSE[.!]?$/i.test(generation.trim())) {
+                return '';
+            }
+
             if (current_msg_time !== this.most_recent_msg_time) {
                 console.warn(`${this.agent.name} received new message while generating, discarding old response.`);
                 return '';

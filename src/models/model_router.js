@@ -1,4 +1,5 @@
 const FAILURE_TEXT = /brain disconnected|no response data|no response from/i;
+const PUNCTUATION_ONLY = /^[\s.,!?;:…_'"`~()\[\]{}-]+$/u;
 
 function timeout(promise, timeoutMs, providerName) {
     let timer;
@@ -45,7 +46,12 @@ export class ModelRouter {
                     provider.timeoutMs,
                     provider.name
                 );
-                if (typeof result !== 'string' || !result.trim() || FAILURE_TEXT.test(result)) {
+                if (
+                    typeof result !== 'string' ||
+                    !result.trim() ||
+                    FAILURE_TEXT.test(result) ||
+                    PUNCTUATION_ONLY.test(result.trim())
+                ) {
                     throw new Error('provider returned an unusable response');
                 }
                 console.log(`[router] ${provider.name} answered in ${Date.now() - started}ms.`);
