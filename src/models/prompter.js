@@ -105,14 +105,18 @@ export class Prompter {
 
         
         let embedding_model_profile = null;
-        if (this.profile.embedding) {
+        const embeddingsDisabled = this.profile.embedding === false;
+        if (!embeddingsDisabled && this.profile.embedding) {
             try {
                 embedding_model_profile = prepareProfile(this.profile.embedding);
             } catch (e) {
                 embedding_model_profile = null;
             }
         }
-        if (embedding_model_profile) {
+        if (embeddingsDisabled) {
+            this.embedding_model = null;
+        }
+        else if (embedding_model_profile) {
             this.embedding_model = createModel(embedding_model_profile);
         }
         else {
@@ -126,7 +130,7 @@ export class Prompter {
         }
         this.minecraft_knowledge = new MinecraftKnowledge(knowledgeEmbeddingModel, {
             databasePath: settings.knowledge_database,
-            embeddingModel: this.profile.knowledge_embedding?.model || this.profile.embedding?.model
+            embeddingModel: this.profile.knowledge_embedding?.model || this.profile.embedding?.model || 'none'
         });
         mkdirSync(`./bots/${name}`, { recursive: true });
         writeFileSync(`./bots/${name}/last_profile.json`, JSON.stringify(this.profile, null, 4), (err) => {

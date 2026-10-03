@@ -1,5 +1,6 @@
 import Groq from 'groq-sdk'
 import { getFirstKey } from '../utils/keys.js';
+import { strictFormat } from '../utils/text.js';
 
 // THIS API IS NOT TO BE CONFUSED WITH GROK!
 // Go to grok.js for that. :)
@@ -35,7 +36,11 @@ export class GroqCloudAPI {
 
     async sendRequest(turns, systemMessage, stop_seq = null) {
         // Construct messages array
-        let messages = [{"role": "system", "content": systemMessage}].concat(turns);
+        // Some Groq-hosted chat templates reject system-only requests (memory
+        // summarization is one such Mindcraft call). strictFormat supplies a
+        // harmless user turn and normalizes repeated roles.
+        let messages = [{"role": "system", "content": systemMessage}]
+            .concat(strictFormat(turns.map(turn => ({ ...turn }))));
 
         try {
             console.log("Awaiting Groq response...");

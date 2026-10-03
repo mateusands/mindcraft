@@ -53,7 +53,10 @@ export class ModelRouter {
             } catch (error) {
                 provider.unavailableUntil = Date.now() + provider.cooldownMs;
                 failures.push(`${provider.name}: ${error.message}`);
-                console.warn(`[router] ${provider.name} failed after ${Date.now() - started}ms; trying fallback.`);
+                console.warn(
+                    `[router] ${provider.name} failed after ${Date.now() - started}ms: ` +
+                    `${error.message}; trying fallback.`
+                );
             }
         }
         throw new Error(`All model providers failed (${failures.join('; ')}).`);

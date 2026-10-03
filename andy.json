@@ -20,7 +20,7 @@
             "api": "groq",
             "model": "qwen/qwen3.8-27b",
             "timeout_ms": 3500,
-            "cooldown_ms": 30000,
+            "cooldown_ms": 5000,
             "params": {
                 "request_timeout_ms": 3000,
                 "max_completion_tokens": 600,
@@ -32,7 +32,7 @@
             "api": "mimo",
             "model": "mimo-v2.6-flash",
             "timeout_ms": 6500,
-            "cooldown_ms": 15000,
+            "cooldown_ms": 5000,
             "params": {
                 "request_timeout_ms": 6000,
                 "max_tokens": 600,
@@ -40,9 +40,26 @@
             }
         },
         {
+            "name": "ollama-qwen-local",
+            "api": "ollama",
+            "model": "qwen3:1.7b",
+            "timeout_ms": 5000,
+            "cooldown_ms": 5000,
+            "params": {
+                "think": false,
+                "keep_alive": "30m",
+                "options": {
+                    "temperature": 0.2,
+                    "num_predict": 400,
+                    "num_ctx": 8192
+                }
+            }
+        },
+        {
             "name": "openai-luna-last-resort",
             "api": "openai",
             "model": "gpt-6-luna",
+            "rpm": 1,
             "timeout_ms": 10000,
             "cooldown_ms": 30000,
             "params": {
@@ -56,10 +73,7 @@
         "timeout_ms": 8000,
         "cooldown_ms": 30000
     },
-    "embedding": {
-        "api": "openai",
-        "model": "text-embedding-3-small"
-    },
+    "embedding": false,
     "knowledge_embedding": {
         "api": "nvidia",
         "model": "nvidia/nemotron-3-embed-1b"
