@@ -33,7 +33,7 @@ const ERROR_DEFINITIONS = {
         isFatal: false
     },
     'behavior': {
-        keywords: ['flying', 'spam', 'speed'],
+        keywords: ['flying', 'spam', 'speed', 'invalid_player_movement'],
         msg: 'Kicked: Removed from server due to flying, spamming, or invalid movement.',
         isFatal: true
     }
@@ -50,7 +50,16 @@ export const log = (agentName, msg) => {
 export function parseKickReason(reason) {
     if (!reason) return { type: 'unknown', msg: 'Unknown reason (Empty)', isFatal: true };
     
-    const raw = (typeof reason === 'string' ? reason : JSON.stringify(reason)).toLowerCase();
+    let serialized;
+    if (typeof reason === 'string') {
+        serialized = reason;
+    } else {
+        try { serialized = JSON.stringify(reason); } catch (_) { serialized = ''; }
+        const rendered = reason?.toString?.();
+        if ((!serialized || serialized === '{}') && rendered && rendered !== '[object Object]')
+            serialized = rendered;
+    }
+    const raw = String(serialized || reason).toLowerCase();
 
     // Search for keywords in definitions
     for (const [type, def] of Object.entries(ERROR_DEFINITIONS)) {
@@ -64,7 +73,8 @@ export function parseKickReason(reason) {
     let fallback = raw;
     try {
         const obj = typeof reason === 'string' ? JSON.parse(reason) : reason;
-        fallback = obj.translate || obj.text || (obj.value?.translate) || raw;
+        fallback = obj.translate?.value || obj.translate || obj.text?.value || obj.text ||
+            obj.value?.translate?.value || obj.value?.translate || raw;
     } catch (_) {}
     
     return { type: 'other', msg: `Disconnected: ${fallback}`, isFatal: true };

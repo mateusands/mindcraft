@@ -389,10 +389,15 @@ export const actionsList = [
     },
     {
         name: '!endGoal',
-        description: 'Call when you have accomplished your goal. It will stop self-prompting and the current action. ',
+        description: 'Call only after accomplishing the goal. Observable goals are checked against actual world/inventory state before self-prompting can stop.',
         perform: async function (agent) {
+            const verification = skills.verifyGoalCompletion(agent.bot, agent.self_prompter.prompt);
+            if (verification.complete === false)
+                return verification.reason;
             agent.self_prompter.stop();
-            return 'Self-prompting stopped.';
+            return verification.complete === true
+                ? `${verification.reason} Self-prompting stopped.`
+                : 'Self-prompting stopped.';
         }
     },
     {
@@ -499,6 +504,22 @@ export const actionsList = [
         perform: runAsAction(async (agent) => {
             await skills.goToSurface(agent.bot);
         })
+    },
+    {
+        name: '!makeObsidian',
+        description: 'Safely pour water on lava sources and mine obsidian. Requires a water bucket (or an empty bucket near water) and a diamond/netherite pickaxe. Never walks into lava and never mines obsidian whose drop would fall into lava.',
+        params: {'num': { type: 'int', description: 'Total obsidian desired in inventory.', domain: [1, 64] }},
+        perform: runAsAction(async (agent, num) => {
+            await skills.makeObsidian(agent.bot, num);
+        }, false, 15)
+    },
+    {
+        name: '!buildNetherPortal',
+        description: 'Build and light a Nether portal on nearby dry solid ground. Requires 10 obsidian, flint_and_steel or fire_charge, and a few cheap blocks for corners. Completion is verified from actual nether_portal blocks.',
+        params: {},
+        perform: runAsAction(async (agent) => {
+            await skills.buildNetherPortal(agent.bot);
+        }, false, 10)
     },
     {
         name: '!useOn',

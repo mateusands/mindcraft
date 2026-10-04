@@ -9,7 +9,7 @@ const modes = {
     self_preservation: true,
     unstuck: true,
     cowardice: false,
-    self_defense: false,
+        self_defense: true,
     hunting: false,
     item_collecting: true,
     torch_placing: true,

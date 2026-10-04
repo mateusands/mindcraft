@@ -24,13 +24,13 @@ async function say(agent, message) {
 const modes_list = [
     {
         name: 'danger_response',
-        description: 'Create distance from any nearby hostile when health is low, and always evade approaching creepers. Interrupts all actions.',
+        description: 'Create distance from approaching creepers before they explode. Ordinary damage and other hostiles are handled by combat, not kiting.',
         interrupts: ['all'],
         on: true,
         active: false,
         update: async function (agent) {
             const hostile = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 12);
-            const shouldEvade = hostile && (hostile.name === 'creeper' || agent.bot.health <= 10);
+            const shouldEvade = hostile?.name === 'creeper';
             if (shouldEvade && await world.isClearPath(agent.bot, hostile)) {
                 say(agent, `${hostile.name.replace('_', ' ')} nearby! Moving to safety.`);
                 execute(this, agent, async () => {
@@ -41,7 +41,7 @@ const modes_list = [
     },
     {
         name: 'self_preservation',
-        description: 'Respond to drowning, burning, and damage at low health. Interrupts all actions.',
+        description: 'Respond to drowning, fire, and lava. Damage by itself never triggers a panic run.',
         interrupts: ['all'],
         on: true,
         active: false,
@@ -63,41 +63,18 @@ const modes_list = [
                     await skills.moveAway(bot, 2);
                 });
             }
-            else if (block.name === 'lava' || block.name === 'fire' ||
-                blockAbove.name === 'lava' || blockAbove.name === 'fire') {
-                say(agent, 'I\'m on fire!');
-                // if you have a water bucket, use it
-                let waterBucket = bot.inventory.findInventoryItem('water_bucket');
-                if (waterBucket) {
-                    execute(this, agent, async () => {
-                        let success = await skills.placeBlock(bot, 'water_bucket', block.position.x, block.position.y, block.position.z);
-                        if (success) say(agent, 'Placed some water, ahhhh that\'s better!');
-                    });
-                }
-                else {
-                    execute(this, agent, async () => {
-                        let waterBucket = bot.inventory.findInventoryItem('water_bucket');
-                        if (waterBucket) {
-                            let success = await skills.placeBlock(bot, 'water_bucket', block.position.x, block.position.y, block.position.z);
-                            if (success) say(agent, 'Placed some water, ahhhh that\'s better!');
-                            return;
-                        }
-                        let nearestWater = world.getNearestBlock(bot, 'water', 20);
-                        if (nearestWater) {
-                            const pos = nearestWater.position;
-                            let success = await skills.goToPosition(bot, pos.x, pos.y, pos.z, 0.2);
-                            if (success) say(agent, 'Found some water, ahhhh that\'s better!');
-                            return;
-                        }
-                        await skills.moveAway(bot, 5);
-                    });
-                }
-            }
-            else if (settings.escape_on_damage !== false && Date.now() - bot.lastDamageTime < 3000 && (bot.health < 5 || bot.lastDamageTaken >= bot.health)) {
-                say(agent, 'I\'m dying!');
+            else if (skills.isInImmediateLavaDanger(bot)) {
+                say(agent, 'I fell into lava! Escaping now.');
                 execute(this, agent, async () => {
-                    await skills.moveAway(bot, 20);
-                });
+                    const escaped = await skills.emergencyEscapeLava(bot);
+                    if (escaped) say(agent, 'Escaped the lava.');
+                }, 1);
+            }
+            else if (block.name === 'fire' || blockAbove.name === 'fire') {
+                say(agent, 'I\'m on fire!');
+                execute(this, agent, async () => {
+                    await skills.extinguishFire(bot);
+                }, 1);
             }
             else if (agent.isIdle()) {
                 bot.clearControlStates(); // clear jump if not in danger or doing anything else

@@ -17,6 +17,7 @@ import settings from './settings.js';
 import { Task } from './tasks/tasks.js';
 import { speak } from './speak.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
+import * as skills from './library/skills.js';
 
 export class Agent {
     async start(load_mem=false, init_message=null, count_id=0) {
@@ -71,6 +72,7 @@ export class Agent {
             this._disconnectHandled = true;
 
             // Log and Analyze
+            console.error(`[connection] Raw ${event} reason:`, reason);
             // handleDisconnection handles logging to console and server
             const { type } = handleDisconnection(this.name, reason);
      
@@ -109,6 +111,11 @@ export class Agent {
         this.bot.once('spawn', async () => {
             try {
                 clearTimeout(spawnTimeout);
+                this.bot.output = this.bot.output || '';
+                if (skills.isInImmediateLavaDanger(this.bot)) {
+                    console.warn(`[survival] ${this.name} spawned in or directly above lava; starting emergency escape before agent initialization.`);
+                    await skills.emergencyEscapeLava(this.bot);
+                }
                 addBrowserViewer(this.bot, count_id);
                 console.log('Initializing vision intepreter...');
                 this.vision_interpreter = new VisionInterpreter(this, settings.allow_vision);

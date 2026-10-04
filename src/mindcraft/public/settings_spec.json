@@ -164,7 +164,7 @@
     },
     "escape_on_damage": {
         "type": "boolean",
-        "description": "Whether critically low health triggers an automatic long escape movement.",
-        "default": true
+        "description": "Legacy compatibility setting. Damage alone no longer triggers an automatic panic run.",
+        "default": false
     }
 }

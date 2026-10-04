@@ -67,6 +67,56 @@ export function initBot(username) {
 
     const bot = createBot(options);
 
+    // Vanilla disconnects the client immediately if any movement coordinate or
+    // rotation is NaN/Infinity. This can briefly occur after knockback, lava or
+    // a pathfinder reset, so never let an invalid packet reach the server.
+    const originalWrite = bot._client.write.bind(bot._client);
+    const lastValidMovement = {};
+    let lastInvalidMovementWarning = 0;
+    const movementPackets = new Set(['position', 'position_look', 'look']);
+    const movementFields = ['x', 'y', 'z', 'yaw', 'pitch'];
+    const sanitizeMovement = (name, data) => {
+        if (!movementPackets.has(name) || !data)
+            return data;
+        const clean = {...data};
+        for (const field of movementFields) {
+            if (!Object.prototype.hasOwnProperty.call(clean, field) || typeof clean[field] !== 'number')
+                continue;
+            if (Number.isFinite(clean[field])) {
+                lastValidMovement[field] = clean[field];
+                continue;
+            }
+            const entityValue = field === 'x' || field === 'y' || field === 'z'
+                ? bot.entity?.position?.[field]
+                : bot.entity?.[field];
+            const fallback = Number.isFinite(lastValidMovement[field])
+                ? lastValidMovement[field]
+                : (Number.isFinite(entityValue) ? entityValue : 0);
+            clean[field] = fallback;
+            // Repair Mineflayer's local physics state as well. Otherwise the
+            // next tick generates another invalid packet and pathfinder goals
+            // are calculated from NaN coordinates.
+            if (field === 'x' || field === 'y' || field === 'z') {
+                if (bot.entity?.position && !Number.isFinite(bot.entity.position[field]))
+                    bot.entity.position[field] = fallback;
+            } else if (bot.entity && !Number.isFinite(bot.entity[field])) {
+                bot.entity[field] = fallback;
+            }
+            if (bot.entity?.velocity) {
+                for (const axis of ['x', 'y', 'z']) {
+                    if (!Number.isFinite(bot.entity.velocity[axis]))
+                        bot.entity.velocity[axis] = 0;
+                }
+            }
+            const now = Date.now();
+            if (now - lastInvalidMovementWarning > 1000) {
+                console.warn(`[movement] Replaced invalid ${field} in ${name} packet with ${fallback}.`);
+                lastInvalidMovementWarning = now;
+            }
+        }
+        return clean;
+    };
+
     // Optional workaround for servers with strict movement packet rate limits.
     // It is disabled for vanilla/LAN because delaying a packet until after
     // knockback can make the server reject it as an invalid player movement.
@@ -75,8 +125,8 @@ export function initBot(username) {
         let lastPositionUpdate = 0;
         let pendingPositionPacket = null;
         let pendingPositionData = null;
-        const originalWrite = bot._client.write.bind(bot._client);
         bot._client.write = function(name, data) {
+            data = sanitizeMovement(name, data);
             if (name === 'position' || name === 'position_look' || name === 'look') {
                 const now = Date.now();
                 const remaining = positionThrottleMs - (now - lastPositionUpdate);
@@ -104,6 +154,11 @@ export function initBot(username) {
             pendingPositionPacket = null;
             pendingPositionData = null;
         });
+    }
+    else {
+        bot._client.write = function(name, data) {
+            return originalWrite(name, sanitizeMovement(name, data));
+        };
     }
 
     // Suppress PartialReadError for non-critical packets

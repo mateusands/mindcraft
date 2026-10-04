@@ -33,6 +33,200 @@ async function equipHighestAttack(bot) {
         await bot.equip(weapon, 'hand');
 }
 
+const SCAFFOLD_BLOCKS = ['dirt', 'cobblestone', 'cobbled_deepslate', 'netherrack', 'stone',
+    'andesite', 'diorite', 'granite', 'tuff', 'blackstone', 'basalt', 'end_stone', 'sandstone'];
+const DANGER_BLOCKS = ['magma_block', 'powder_snow', 'sweet_berry_bush', 'wither_rose',
+    'campfire', 'soul_campfire', 'soul_fire', 'cactus', 'pointed_dripstone'];
+const PROTECTED_BLOCKS = ['end_portal_frame', 'end_portal', 'nether_portal', 'chest', 'furnace',
+    'crafting_table', 'spawner', 'bed', 'respawn_anchor'];
+
+function makeMovements(bot, {destructive=true, digCost=null, placeCost=null} = {}) {
+    /** Consistent survival movement: avoid hazards and preserve useful blocks. */
+    const movements = new pf.Movements(bot);
+    movements.allowSprinting = true;
+    movements.allowParkour = true;
+    movements.allow1by1towers = true;
+    movements.canDig = destructive;
+    movements.maxDropDown = bot.health > 14 ? 4 : 3;
+    movements.liquidCost = 8;
+    if (digCost !== null) movements.digCost = digCost;
+    if (placeCost !== null) movements.placeCost = placeCost;
+
+    const scaffold = new Set(movements.scafoldingBlocks);
+    for (const name of SCAFFOLD_BLOCKS) {
+        const item = bot.registry.itemsByName[name];
+        if (item) scaffold.add(item.id);
+    }
+    movements.scafoldingBlocks = [...scaffold];
+    for (const name of DANGER_BLOCKS) {
+        const block = bot.registry.blocksByName[name];
+        if (block) movements.blocksToAvoid.add(block.id);
+    }
+    for (const block of bot.registry.blocksArray) {
+        if (PROTECTED_BLOCKS.some(name => block.name === name || block.name.endsWith('_' + name)))
+            movements.blocksCantBreak.add(block.id);
+    }
+    return movements;
+}
+
+function getScaffoldItem(bot) {
+    const items = bot.inventory.items();
+    for (const name of SCAFFOLD_BLOCKS) {
+        const item = items.find(candidate => candidate.name === name);
+        if (item) return item;
+    }
+    return null;
+}
+
+function getDimension(bot) {
+    return (bot.game.dimension || 'overworld').replace('minecraft:', '');
+}
+
+function isAirLike(block) {
+    return !block || (block.boundingBox === 'empty' && !['water', 'lava'].includes(block.name));
+}
+
+function safeStandingPositionBeside(bot, block) {
+    const offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (const [dx, dz] of offsets) {
+        const feet = block.position.offset(dx, 0, dz);
+        const feetBlock = bot.blockAt(feet);
+        const headBlock = bot.blockAt(feet.offset(0, 1, 0));
+        const floor = bot.blockAt(feet.offset(0, -1, 0));
+        if (isAirLike(feetBlock) && isAirLike(headBlock) && floor?.boundingBox === 'block' &&
+            !DANGER_BLOCKS.includes(floor.name) && floor.name !== 'lava')
+            return feet;
+    }
+    return null;
+}
+
+export function isInLava(bot) {
+    if (!bot.entity?.position)
+        return false;
+    if (bot.entity.isInLava)
+        return true;
+    const feet = bot.blockAt(bot.entity.position);
+    const head = bot.blockAt(bot.entity.position.offset(0, 1, 0));
+    return feet?.name === 'lava' || head?.name === 'lava';
+}
+
+export function isInImmediateLavaDanger(bot) {
+    if (isInLava(bot))
+        return true;
+    if (!bot.entity?.position)
+        return false;
+    const feetPos = bot.entity.position.floored();
+    const feet = bot.blockAt(feetPos);
+    // A solid ledge next to lava is safe. Trigger only when there is no floor and
+    // lava is directly in the short fall path beneath the bot.
+    if (feet && feet.boundingBox !== 'empty')
+        return false;
+    for (let depth = 1; depth <= 2; depth++) {
+        const below = bot.blockAt(feetPos.offset(0, -depth, 0));
+        if (!below)
+            return false;
+        if (below.name === 'lava')
+            return true;
+        if (below.boundingBox === 'block')
+            return false;
+    }
+    return false;
+}
+
+export async function extinguishFire(bot) {
+    /** Put out fire without starting a long, directionless panic run. */
+    const waterBucket = bot.inventory.findInventoryItem('water_bucket');
+    if (!waterBucket)
+        return false;
+    try {
+        const pos = bot.entity.position.floored();
+        return await placeBlock(bot, 'water', pos.x, pos.y, pos.z);
+    } catch (err) {
+        console.warn(`[survival] Could not extinguish fire: ${err.message}`);
+        return false;
+    }
+}
+
+export async function emergencyEscapeLava(bot, timeoutMs=12000) {
+    /** Escape lava immediately without waiting for an LLM decision or normal action planning. */
+    if (!isInImmediateLavaDanger(bot))
+        return true;
+
+    console.warn(`[survival] Emergency lava escape at ${bot.entity.position.floored()}.`);
+    log(bot, `Emergency lava escape started at ${bot.entity.position.floored()}.`);
+    bot.pvp.stop();
+    bot.pathfinder.stop();
+    // Start swimming before any awaited inventory or pathfinding operation.
+    bot.setControlState('jump', true);
+    bot.setControlState('sprint', true);
+
+    const waterBucket = bot.inventory.findInventoryItem('water_bucket');
+    if (waterBucket) {
+        try {
+            // Do not call placeBlock/useToolOnBlock here: both may pathfind first.
+            // Aim at the lava/solid block below and use the bucket immediately.
+            const feet = bot.entity.position.floored();
+            let target = null;
+            for (let depth = 0; depth <= 2 && !target; depth++) {
+                const block = bot.blockAt(feet.offset(0, -depth, 0));
+                if (block && block.name !== 'air' && block.name !== 'cave_air')
+                    target = block;
+            }
+            await bot.equip(waterBucket, 'hand');
+            if (target)
+                await bot.lookAt(target.position.offset(0.5, 0.8, 0.5), true);
+            else
+                await bot.look(bot.entity.yaw, Math.PI / 2, true);
+            await bot.activateItem();
+            await new Promise(resolve => setTimeout(resolve, 200));
+            if (!isInImmediateLavaDanger(bot)) {
+                log(bot, 'Escaped lava by placing water.');
+                bot.clearControlStates();
+                return true;
+            }
+        } catch (err) {
+            console.warn(`[survival] Could not place emergency water: ${err.message}`);
+        }
+    }
+
+    const safePos = world.getNearestFreeSpace(bot, 1, 16);
+    if (safePos) {
+        const movements = makeMovements(bot, {destructive: false});
+        movements.canDig = false;
+        movements.allow1by1towers = false;
+        movements.allowParkour = false;
+        movements.liquidCost = 100;
+        // Lava must temporarily remain traversable only because the bot is already
+        // inside it. The destination itself is always dry solid ground.
+        movements.blocksToAvoid.delete(bot.registry.blocksByName.lava.id);
+        bot.pathfinder.setMovements(movements);
+        bot.pathfinder.setGoal(new pf.goals.GoalNear(safePos.x, safePos.y, safePos.z, 1));
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    let safeSince = 0;
+    while (Date.now() < deadline) {
+        if (!isInImmediateLavaDanger(bot)) {
+            safeSince ||= Date.now();
+            if (Date.now() - safeSince >= 500)
+                break;
+        } else {
+            safeSince = 0;
+        }
+        if (safePos && !bot.pathfinder.isMoving()) {
+            await bot.lookAt(safePos.offset(0.5, 1, 0.5), true);
+            bot.setControlState('forward', true);
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    bot.pathfinder.stop();
+    bot.clearControlStates();
+    const escaped = !isInImmediateLavaDanger(bot);
+    log(bot, escaped ? 'Escaped lava.' : 'Failed to escape lava before the emergency timeout.');
+    return escaped;
+}
+
 export async function craftRecipe(bot, itemName, num=1, keepTable=false) {
     /**
      * Attempt to craft the given item name from a recipe. May craft many items.
@@ -644,7 +838,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
 
     let collected = 0;
 
-    const movements = new pf.Movements(bot);
+    const movements = makeMovements(bot);
     movements.dontMineUnderFallingBlock = false;
     movements.dontCreateFlow = true;
 
@@ -1284,15 +1478,12 @@ export async function goToGoal(bot, goal) {
      * @param {pf.goals.Goal} goal, the goal to navigate to.
      **/
 
-    const nonDestructiveMovements = new pf.Movements(bot);
+    const nonDestructiveMovements = makeMovements(bot, {destructive: false, digCost: 10, placeCost: 2});
     const dontBreakBlocks = ['glass', 'glass_pane'];
     for (let block of dontBreakBlocks) {
         nonDestructiveMovements.blocksCantBreak.add(mc.getBlockId(block));
     }
-    nonDestructiveMovements.placeCost = 2;
-    nonDestructiveMovements.digCost = 10;
-
-    const destructiveMovements = new pf.Movements(bot);
+    const destructiveMovements = makeMovements(bot);
 
     let final_movements = destructiveMovements;
 
@@ -2140,6 +2331,227 @@ function stringifyItem(bot, item) {
         }
     }
     return text;
+}
+
+function isPortalObsidian(bot, block) {
+    return [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]
+        .some(([x, y, z]) => bot.blockAt(block.position.offset(x, y, z))?.name === 'nether_portal');
+}
+
+async function mineSafeObsidian(bot, num) {
+    // Keep scans local. Large predicate scans block the Mineflayer event loop.
+    const nearby = world.getNearestBlocks(bot, ['obsidian'], 24, 64);
+    const unsafe = nearby.filter(block => {
+        const touchesLava = [[0, -1, 0], [0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]
+            .some(([x, y, z]) => bot.blockAt(block.position.offset(x, y, z))?.name === 'lava');
+        return touchesLava || isPortalObsidian(bot, block);
+    }).map(block => block.position);
+    const available = nearby.length - unsafe.length;
+    if (available <= 0)
+        return false;
+    return await collectBlock(bot, 'obsidian', Math.min(num, available), unsafe);
+}
+
+export async function makeObsidian(bot, num=10) {
+    /** Safely pour water from dry ground and mine only obsidian that cannot fall into lava. */
+    const count = () => world.getInventoryCounts(bot).obsidian || 0;
+    const inv = world.getInventoryCounts(bot);
+    if (!inv.diamond_pickaxe && !inv.netherite_pickaxe) {
+        log(bot, 'Need a diamond_pickaxe or netherite_pickaxe to mine obsidian.');
+        return false;
+    }
+    if (getDimension(bot) === 'the_nether') {
+        log(bot, 'Water evaporates in the Nether; make obsidian in the Overworld.');
+        return false;
+    }
+
+    const tried = [];
+    for (let attempt = 0; attempt < 25 && count() < num; attempt++) {
+        if (bot.interrupt_code)
+            return false;
+        if (await mineSafeObsidian(bot, num - count()))
+            continue;
+
+        if (!bot.inventory.findInventoryItem('water_bucket')) {
+            if (!bot.inventory.findInventoryItem('bucket')) {
+                log(bot, 'Need a water_bucket, or an empty bucket to fill with water.');
+                return false;
+            }
+            log(bot, 'Filling the bucket from a water source before approaching lava.');
+            if (!(await collectBlock(bot, 'water', 1))) {
+                log(bot, 'Could not find a water source for the bucket.');
+                return false;
+            }
+        }
+
+        // Search by block ID first so Mineflayer can skip chunk sections that do
+        // not contain lava, then inspect source metadata on the small result set.
+        const lava = world.getNearestBlocks(bot, ['lava'], 24, 24)
+            .filter(block => block.metadata === 0)
+            .filter(block => !tried.some(pos => pos.distanceTo(block.position) < 3))
+            .filter(block => isAirLike(bot.blockAt(block.position.offset(0, 1, 0))))
+            .map(block => ({block, stand: safeStandingPositionBeside(bot, block)}))
+            .filter(candidate => candidate.stand);
+        if (lava.length === 0) {
+            log(bot, 'No nearby lava source pool. Explore safely below y=0, then retry !makeObsidian.');
+            return false;
+        }
+
+        const {block: target, stand} = lava[0];
+        tried.push(target.position.clone());
+        log(bot, `Pouring water onto lava from safe ground at ${target.position}.`);
+        if (!(await goToPosition(bot, stand.x, stand.y, stand.z, 0)))
+            continue;
+        const floor = bot.blockAt(bot.entity.position.floored().offset(0, -1, 0));
+        if (isInImmediateLavaDanger(bot) || floor?.boundingBox !== 'block') {
+            log(bot, 'Refusing to pour water: no dry solid floor under the bot.');
+            continue;
+        }
+        const bucket = bot.inventory.findInventoryItem('water_bucket');
+        if (!bucket)
+            continue;
+        await bot.equip(bucket, 'hand');
+        await bot.lookAt(target.position.offset(0.5, 0.8, 0.5), true);
+        await bot.activateItem();
+        await new Promise(resolve => setTimeout(resolve, 250));
+        if (bot.inventory.findInventoryItem('water_bucket'))
+            continue;
+        // Leave water flowing while mining. Besides converting the visible
+        // surface first, it converts newly exposed lava underneath. Never mine
+        // an obsidian block while any face still touches lava.
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        await mineSafeObsidian(bot, num - count());
+
+        // Recover the source only after the safe mining pass is finished. The
+        // next loop may pour it over another still-exposed part of the pool.
+        const water = world.getNearestBlocks(bot, ['water'], 8, 8)
+            .filter(block => block.metadata === 0)
+            .find(block => block.position.distanceTo(target.position) < 4);
+        if (water && !isInImmediateLavaDanger(bot)) {
+            await useToolOnBlock(bot, 'bucket', water);
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+    const have = count();
+    log(bot, `You have ${have} obsidian.`);
+    return have >= num;
+}
+
+export async function buildNetherPortal(bot) {
+    /** Build a minimal 10-obsidian frame on dry solid ground and verify that it lights. */
+    const counts = world.getInventoryCounts(bot);
+    if ((counts.obsidian || 0) < 10) {
+        log(bot, `Need 10 obsidian to build a Nether portal; you have ${counts.obsidian || 0}.`);
+        return false;
+    }
+    if (!counts.flint_and_steel && !counts.fire_charge) {
+        log(bot, 'Need flint_and_steel or a fire_charge to light the portal.');
+        return false;
+    }
+
+    const interior = [[1, 1], [2, 1], [1, 2], [2, 2], [1, 3], [2, 3]];
+    const feet = bot.entity.position.floored();
+    let best = null;
+    for (const axis of ['x', 'z']) {
+        for (let dx = -5; dx <= 5; dx++) {
+            for (let dz = -5; dz <= 5; dz++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    const origin = feet.offset(dx, dy - 1, dz);
+                    const at = (i, j) => axis === 'x' ? origin.offset(i, j, 0) : origin.offset(0, j, i);
+                    let ok = true;
+                    let score = Math.abs(dx) + Math.abs(dz);
+                    for (let i = 0; i < 4 && ok; i++) {
+                        const below = bot.blockAt(at(i, -1));
+                        if (!below || below.boundingBox !== 'block') ok = false;
+                        for (let j = 1; j <= 4 && ok; j++) {
+                            const pos = at(i, j);
+                            const block = bot.blockAt(pos);
+                            if (!block || block.name === 'water' || block.name === 'lava') ok = false;
+                            else if (!isAirLike(block)) score += 3;
+                            if (pos.equals(feet) || pos.equals(feet.offset(0, 1, 0))) ok = false;
+                        }
+                    }
+                    if (ok && (!best || score < best.score)) best = {score, at};
+                }
+            }
+        }
+    }
+    if (!best) {
+        log(bot, 'Could not find a dry, solid area nearby for the portal. Move to flatter ground.');
+        return false;
+    }
+
+    const at = best.at;
+    for (const [i, j] of interior) {
+        const pos = at(i, j);
+        if (!isAirLike(bot.blockAt(pos)) && !(await breakBlockAt(bot, pos.x, pos.y, pos.z))) {
+            log(bot, `Could not clear the portal interior at ${pos}.`);
+            return false;
+        }
+    }
+
+    let placedObsidian = 0;
+    const filler = () => getScaffoldItem(bot)?.name ||
+        ((world.getInventoryCounts(bot).obsidian || 0) > 10 - placedObsidian ? 'obsidian' : null);
+    const order = [
+        ['corner', 0, 0], ['corner', 3, 0], ['obsidian', 1, 0], ['obsidian', 2, 0],
+        ['obsidian', 0, 1], ['obsidian', 0, 2], ['obsidian', 0, 3],
+        ['obsidian', 3, 1], ['obsidian', 3, 2], ['obsidian', 3, 3],
+        ['corner', 0, 4], ['corner', 3, 4], ['obsidian', 1, 4], ['obsidian', 2, 4]
+    ];
+    for (const [kind, i, j] of order) {
+        if (bot.interrupt_code) return false;
+        const name = kind === 'corner' ? filler() : 'obsidian';
+        if (!name) {
+            log(bot, 'Need a few cheap solid blocks for the four portal corners.');
+            return false;
+        }
+        const pos = at(i, j);
+        const existing = bot.blockAt(pos);
+        if (name === 'obsidian' && existing?.name === 'obsidian') continue;
+        if (kind === 'corner' && existing?.boundingBox === 'block') continue;
+        if (!(await placeBlock(bot, name, pos.x, pos.y, pos.z, 'bottom', true))) {
+            log(bot, `Failed to place ${name} at ${pos}.`);
+            return false;
+        }
+        if (name === 'obsidian') placedObsidian++;
+    }
+
+    const lighter = bot.inventory.items().find(item => item.name === 'flint_and_steel') ||
+        bot.inventory.items().find(item => item.name === 'fire_charge');
+    const floor = bot.blockAt(at(1, 0));
+    await goToPosition(bot, floor.position.x, floor.position.y + 1, floor.position.z, 3);
+    await bot.equip(lighter, 'hand');
+    await bot.lookAt(floor.position.offset(0.5, 1, 0.5), true);
+    try {
+        await bot.activateBlock(floor, new Vec3(0, 1, 0));
+    } catch (err) { /* verify the actual portal blocks below */ }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const lit = interior.some(([i, j]) => bot.blockAt(at(i, j))?.name === 'nether_portal');
+    if (!lit) {
+        log(bot, `The frame at ${at(0, 0)} is complete but did not light.`);
+        return false;
+    }
+    log(bot, `Built and verified a lit Nether portal at ${at(1, 1)}.`);
+    return true;
+}
+
+export function verifyGoalCompletion(bot, prompt='') {
+    /** Deterministic checks for goals whose result can be observed in game state. */
+    const normalized = String(prompt).toLowerCase();
+    const asksForNetherPortal = normalized.includes('portal') &&
+        (normalized.includes('nether') || normalized.includes('inferno'));
+    if (asksForNetherPortal) {
+        const portal = world.getNearestBlock(bot, 'nether_portal', 64);
+        if (!portal) {
+            return {
+                complete: false,
+                reason: 'Goal not complete: no lit nether_portal block exists within 64 blocks. Obtain 10 obsidian and use !buildNetherPortal before !endGoal.'
+            };
+        }
+        return {complete: true, reason: `Verified a lit Nether portal at ${portal.position}.`};
+    }
+    return {complete: null, reason: 'No deterministic verifier is registered for this goal type.'};
 }
 
 export async function digDown(bot, distance = 10) {

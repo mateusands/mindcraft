@@ -23,9 +23,13 @@ export function getNearestFreeSpace(bot, size=1, distance=8) {
         let empty = true;
         for (let x = 0; x < size; x++) {
             for (let z = 0; z < size; z++) {
-                let top = bot.blockAt(empty_pos[i].offset(x, 0, z));
+                let feet = bot.blockAt(empty_pos[i].offset(x, 0, z));
+                let head = bot.blockAt(empty_pos[i].offset(x, 1, z));
                 let bottom = bot.blockAt(empty_pos[i].offset(x, -1, z));
-                if (!top || !top.name == 'air' || !bottom || bottom.drops.length == 0 || !bottom.diggable) {
+                const hasBodyRoom = feet?.name === 'air' && head?.name === 'air';
+                const hasSafeFloor = bottom?.boundingBox === 'block' &&
+                    !['lava', 'fire', 'magma_block', 'campfire', 'soul_campfire', 'cactus'].includes(bottom.name);
+                if (!hasBodyRoom || !hasSafeFloor) {
                     empty = false;
                     break;
                 }

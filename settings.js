@@ -60,7 +60,7 @@ const settings = {
     "spawn_timeout": 30, // num seconds allowed for the bot to spawn before throwing error. Increase when spawning takes a while.
     "block_place_delay": 0, // delay between placing blocks (ms) if using newAction. helps avoid bot being kicked by anti-cheat mechanisms on servers.
     "position_packet_throttle_ms": 0, // keep 0 for vanilla/LAN; only raise for a server that rate-limits movement packets
-    "escape_on_damage": false, // do not trigger a long panic sprint after taking damage
+    "escape_on_damage": false, // legacy setting; damage alone never triggers a panic sprint
   
     "log_all_prompts": false, // log ALL prompts to file
 };
