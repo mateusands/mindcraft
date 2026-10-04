@@ -324,14 +324,30 @@ export function isSmeltable(itemName) {
     return itemName.includes('raw') || itemName.includes('log') || misc_smeltables.includes(itemName);
 }
 
-export function getSmeltingFuel(bot) {
-    let fuel = bot.inventory.items().find(i => i.name === 'coal' || i.name === 'charcoal' || i.name === 'blaze_rod')
-    if (fuel)
-        return fuel;
-    fuel = bot.inventory.items().find(i => i.name.includes('log') || i.name.includes('planks'))
-    if (fuel)
-        return fuel;
-    return bot.inventory.items().find(i => i.name === 'coal_block' || i.name === 'lava_bucket');
+export function getSmeltingFuel(bot, requiredSmelts=1) {
+    const fuels = bot.inventory.items()
+        .filter(item => getFuelSmeltOutput(item.name) > 0)
+        .map(item => ({
+            item,
+            output: getFuelSmeltOutput(item.name),
+            capacity: Math.floor(item.count * getFuelSmeltOutput(item.name))
+        }));
+
+    if (fuels.length === 0)
+        return null;
+
+    const sufficient = fuels.filter(fuel => fuel.capacity >= requiredSmelts);
+    if (sufficient.length > 0) {
+        sufficient.sort((a, b) => {
+            const aItems = Math.ceil(requiredSmelts / a.output);
+            const bItems = Math.ceil(requiredSmelts / b.output);
+            return aItems - bItems || a.capacity - b.capacity;
+        });
+        return sufficient[0].item;
+    }
+
+    fuels.sort((a, b) => b.capacity - a.capacity);
+    return fuels[0].item;
 }
 
 export function getFuelSmeltOutput(fuelName) {

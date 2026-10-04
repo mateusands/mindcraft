@@ -23,6 +23,23 @@ async function say(agent, message) {
 // to perform longer actions, use the execute function which won't block the update loop
 const modes_list = [
     {
+        name: 'danger_response',
+        description: 'Create distance from any nearby hostile when health is low, and always evade approaching creepers. Interrupts all actions.',
+        interrupts: ['all'],
+        on: true,
+        active: false,
+        update: async function (agent) {
+            const hostile = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 12);
+            const shouldEvade = hostile && (hostile.name === 'creeper' || agent.bot.health <= 10);
+            if (shouldEvade && await world.isClearPath(agent.bot, hostile)) {
+                say(agent, `${hostile.name.replace('_', ' ')} nearby! Moving to safety.`);
+                execute(this, agent, async () => {
+                    await skills.evadeHostile(agent.bot, hostile, 12);
+                }, 8);
+            }
+        }
+    },
+    {
         name: 'self_preservation',
         description: 'Respond to drowning, burning, and damage at low health. Interrupts all actions.',
         interrupts: ['all'],
@@ -123,10 +140,16 @@ const modes_list = [
                 say(agent, 'I\'m stuck!');
                 this.stuck_time = 0;
                 execute(this, agent, async () => {
-                    const crashTimeout = setTimeout(() => { agent.cleanKill("Got stuck and couldn't get unstuck") }, 10000);
-                    await skills.moveAway(bot, 5);
-                    clearTimeout(crashTimeout);
-                    say(agent, 'I\'m free.');
+                    const recoveryTimeout = setTimeout(() => {
+                        bot.pathfinder.stop();
+                        bot.clearControlStates();
+                    }, 10000);
+                    try {
+                        await skills.moveAway(bot, 5);
+                        say(agent, 'I\'m free.');
+                    } finally {
+                        clearTimeout(recoveryTimeout);
+                    }
                 });
             }
             this.last_time = Date.now();
@@ -160,11 +183,11 @@ const modes_list = [
         on: true,
         active: false,
         update: async function (agent) {
-            const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 8);
+            const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 12);
             if (enemy && await world.isClearPath(agent.bot, enemy)) {
                 say(agent, `Fighting ${enemy.name}!`);
                 execute(this, agent, async () => {
-                    await skills.defendSelf(agent.bot, 8);
+                    await skills.defendSelf(agent.bot, 12);
                 });
             }
         }

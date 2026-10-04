@@ -151,7 +151,12 @@ export class Agent {
             "Set the difficulty to",
             "Teleported ",
             "Set the weather to",
-            "Gamerule "
+            "Gamerule ",
+            "Applied effect ",
+            "Removed effect ",
+            "Cleared effects from ",
+            "Gave ",
+            "Changed the block at "
         ];
         
         const respondFunc = async (username, message) => {

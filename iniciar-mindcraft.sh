@@ -95,6 +95,16 @@ esac
 
 profile_args=("$preset")
 if [[ "$preset" == "openai" ]]; then
+    if [[ -n "${MINDCRAFT_OPENAI_MODEL:-}" ]]; then
+        selected_model="$MINDCRAFT_OPENAI_MODEL"
+        selected_effort="${MINDCRAFT_OPENAI_EFFORT:-low}"
+        case "$selected_effort" in
+            low|medium|high) ;;
+            *) echo "Esforço OpenAI inválido: $selected_effort"; exit 1 ;;
+        esac
+        profile_args+=("$selected_model" "$selected_effort")
+        selection_label="OpenAI $selected_model ($selected_effort)"
+    else
     echo
     echo "Consultando modelos disponíveis na sua chave OpenAI..."
     openai_lines="$(node ./scripts/launcher-profile.js list-openai 2>/dev/null || true)"
@@ -136,6 +146,7 @@ if [[ "$preset" == "openai" ]]; then
     esac
     profile_args+=("$selected_model" "$selected_effort")
     selection_label="OpenAI $selected_model ($selected_effort)"
+    fi
 fi
 
 PROFILE_PATH="$(node ./scripts/launcher-profile.js "${profile_args[@]}")"
@@ -155,7 +166,8 @@ cleanup() {
 trap cleanup HUP INT TERM EXIT
 
 profiles_json="$(node -e 'console.log(JSON.stringify([process.argv[1]]))' "$PROFILE_PATH")"
-setsid env MINECRAFT_PORT="$LAN_PORT" PROFILES="$profiles_json" npm start &
+runtime_log="$REPO_DIR/bots/andy/runtime.log"
+setsid bash -o pipefail -c 'env MINECRAFT_PORT="$1" PROFILES="$2" npm start 2>&1 | tee -a "$3"' _ "$LAN_PORT" "$profiles_json" "$runtime_log" &
 child_pid=$!
 if wait "$child_pid"; then
     exit_code=0

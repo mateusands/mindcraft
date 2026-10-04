@@ -275,6 +275,18 @@ export const actionsList = [
         })
     },
     {
+        name: '!craftEquipmentSet',
+        description: 'Craft every missing armor piece and/or standard tool of one material in a single batch while reusing one crafting table. Use this instead of separate craftRecipe calls for a complete set.',
+        params: {
+            'material': { type: 'string', description: 'Material prefix such as iron, diamond, golden, stone, or wooden.' },
+            'include_armor': { type: 'boolean', description: 'Craft helmet, chestplate, leggings, and boots.' },
+            'include_tools': { type: 'boolean', description: 'Craft pickaxe, axe, shovel, sword, and hoe.' }
+        },
+        perform: runAsAction(async (agent, material, include_armor, include_tools) => {
+            await skills.craftEquipmentSet(agent.bot, material, include_armor, include_tools);
+        })
+    },
+    {
         name: '!smeltItem',
         description: 'Smelt the given item the given number of times.',
         params: {

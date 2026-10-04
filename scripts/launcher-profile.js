@@ -78,7 +78,7 @@ const openai = (model = 'gpt-6-luna', effort = 'low') => ({
     model,
     timeout_ms: 15000,
     cooldown_ms: 5000,
-    params: { reasoning: { effort } }
+    params: { reasoning: { effort }, request_timeout_ms: 15000, max_retries: 0 }
 });
 
 function makeProfile(providers) {

@@ -6,10 +6,15 @@ export class GPT {
     static prefix = 'openai';
     constructor(model_name, url, params) {
         this.model_name = model_name;
-        this.params = params;
+        this.params = { ...(params || {}) };
         this.url = url; // store so that we know whether a custom URL has been set
 
-        let config = {};
+        const requestTimeout = this.params.request_timeout_ms || 20000;
+        const maxRetries = this.params.max_retries ?? 1;
+        delete this.params.request_timeout_ms;
+        delete this.params.max_retries;
+
+        let config = { timeout: requestTimeout, maxRetries };
         if (url)
             config.baseURL = url;
 
@@ -22,6 +27,7 @@ export class GPT {
     }
 
     async sendRequest(turns, systemMessage, stop_seq='***') {
+        const startedAt = Date.now();
         let messages = strictFormat(turns);
         messages = messages.map(message => {
             message.content += stop_seq;
@@ -50,7 +56,7 @@ export class GPT {
                 let completion = await this.openai.chat.completions.create(pack);
                 if (completion.choices[0].finish_reason == 'length')
                     throw new Error('Context length exceeded'); 
-                console.log('Received.');
+                console.log(`[openai] ${model} answered in ${Date.now() - startedAt}ms.`);
                 res = completion.choices[0].message.content;
             } 
             // otherwise, use responses
@@ -66,7 +72,8 @@ export class GPT {
                     input: messages,
                     ...(this.params || {})
                 });
-                console.log('Received.');
+                const usage = response.usage || {};
+                console.log(`[openai] ${model} answered in ${Date.now() - startedAt}ms (input=${usage.input_tokens ?? '?'}, output=${usage.output_tokens ?? '?'}).`);
                 res = response.output_text;
                 let stop_seq_index = res.indexOf(stop_seq);
                 res = stop_seq_index !== -1 ? res.slice(0, stop_seq_index) : res;
@@ -80,6 +87,7 @@ export class GPT {
                 console.log(err);
                 res = 'Vision is only supported by certain models.';
             } else {
+                console.warn(`[openai] ${model} failed after ${Date.now() - startedAt}ms.`);
                 console.log(err);
                 res = 'My brain disconnected, try again.';
             }

@@ -119,9 +119,6 @@ export async function craftRecipe(bot, itemName, num=1) {
             }
         }
         log(bot, `You do not have the resources to craft ${itemName}. Missing for the best inventory-compatible recipe: ${missing || 'unknown ingredients'}.${woodHint}`);
-        if (placedTable) {
-            await collectBlock(bot, 'crafting_table', 1);
-        }
         return false;
     }
     
@@ -139,15 +136,57 @@ export async function craftRecipe(bot, itemName, num=1) {
     await bot.craft(recipe, Math.min(craftLimit.num, num), craftingTable);
     if(craftLimit.num<num) log(bot, `Not enough ${craftLimit.limitingResource} to craft ${num}, crafted ${craftLimit.num}. You now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     else log(bot, `Successfully crafted ${itemName}, you now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
-    if (placedTable) {
-        await collectBlock(bot, 'crafting_table', 1);
-    }
+    if (placedTable)
+        log(bot, 'Left the crafting_table in place so it can be reused for the next recipes.');
 
     //Equip any armor the bot may have crafted.
     //There is probablly a more efficient method than checking the entire inventory but this is all mineflayer-armor-manager provides. :P
     bot.armorManager.equipAll(); 
 
     return true;
+}
+
+export async function craftEquipmentSet(bot, material, includeArmor=true, includeTools=true) {
+    /** Craft every missing piece from a material set while reusing one crafting table. */
+    const armorMaterials = new Set(['leather', 'iron', 'golden', 'diamond']);
+    const toolMaterials = new Set(['wooden', 'stone', 'iron', 'golden', 'diamond']);
+    const wanted = [];
+
+    if (includeArmor) {
+        if (!armorMaterials.has(material)) {
+            log(bot, `${material} is not a supported armor material.`);
+            return false;
+        }
+        wanted.push(`${material}_helmet`, `${material}_chestplate`, `${material}_leggings`, `${material}_boots`);
+    }
+    if (includeTools) {
+        if (!toolMaterials.has(material)) {
+            log(bot, `${material} is not a supported tool material.`);
+            return false;
+        }
+        wanted.push(`${material}_pickaxe`, `${material}_axe`, `${material}_shovel`, `${material}_sword`, `${material}_hoe`);
+    }
+
+    const crafted = [];
+    const alreadyOwned = [];
+    const failed = [];
+    for (const itemName of wanted) {
+        const owned = bot.inventory.slots.filter(Boolean).some(item => item.name === itemName);
+        if (owned) {
+            alreadyOwned.push(itemName);
+            continue;
+        }
+        if (await craftRecipe(bot, itemName, 1))
+            crafted.push(itemName);
+        else
+            failed.push(itemName);
+        if (bot.interrupt_code)
+            break;
+    }
+
+    await bot.armorManager.equipAll();
+    log(bot, `Equipment batch complete. Crafted: ${crafted.join(', ') || 'none'}. Already owned: ${alreadyOwned.join(', ') || 'none'}. Failed: ${failed.join(', ') || 'none'}.`);
+    return failed.length === 0 && crafted.length + alreadyOwned.length === wanted.length;
 }
 
 export async function wait(bot, milliseconds) {
@@ -175,6 +214,100 @@ export async function wait(bot, milliseconds) {
     return true;
 }
 
+async function smeltItemInParallel(bot, itemName, requestedNum, maxFurnaces=4) {
+    const inventory = world.getInventoryCounts(bot);
+    const desiredFurnaces = Math.min(maxFurnaces, Math.max(2, Math.ceil(requestedNum / 16)));
+    let furnaceBlocks = world.getNearestBlocks(bot, 'furnace', 16, desiredFurnaces);
+    const carriedFurnaces = inventory.furnace || 0;
+    const craftableFurnaces = Math.floor((inventory.cobblestone || 0) / 8);
+    const missing = Math.max(0, desiredFurnaces - furnaceBlocks.length - carriedFurnaces);
+
+    if (missing > 0 && craftableFurnaces > 0) {
+        await craftRecipe(bot, 'furnace', Math.min(missing, craftableFurnaces));
+    }
+
+    while (furnaceBlocks.length < desiredFurnaces && (world.getInventoryCounts(bot).furnace || 0) > 0) {
+        const pos = world.getNearestFreeSpace(bot, 1, 8);
+        if (!pos)
+            break;
+        const placed = await placeBlock(bot, 'furnace', pos.x, pos.y, pos.z);
+        if (!placed)
+            break;
+        furnaceBlocks = world.getNearestBlocks(bot, 'furnace', 16, desiredFurnaces);
+    }
+
+    if (furnaceBlocks.length < 2)
+        return null;
+
+    const currentInventory = world.getInventoryCounts(bot);
+    const availableInput = currentInventory[itemName] || 0;
+    const fuel = mc.getSmeltingFuel(bot, Math.min(requestedNum, availableInput));
+    if (!fuel)
+        return null;
+
+    const fuelOutput = mc.getFuelSmeltOutput(fuel.name);
+    const num = Math.min(requestedNum, availableInput, Math.floor(fuel.count * fuelOutput));
+    if (num < 2)
+        return null;
+
+    const furnaceCount = Math.min(furnaceBlocks.length, num);
+    const baseBatch = Math.floor(num / furnaceCount);
+    let remainder = num % furnaceCount;
+    let fuelRemaining = fuel.count;
+    const jobs = [];
+
+    for (const block of furnaceBlocks.slice(0, furnaceCount)) {
+        const batch = baseBatch + (remainder-- > 0 ? 1 : 0);
+        const fuelCount = Math.ceil(batch / fuelOutput);
+        if (fuelCount > fuelRemaining)
+            break;
+        if (bot.entity.position.distanceTo(block.position) > 4)
+            await goToPosition(bot, block.position.x, block.position.y, block.position.z, 3);
+
+        const furnace = await bot.openFurnace(block);
+        if (furnace.inputItem()) {
+            await bot.closeWindow(furnace);
+            continue;
+        }
+        await furnace.putFuel(fuel.type, null, fuelCount);
+        await furnace.putInput(mc.getItemId(itemName), null, batch);
+        await bot.closeWindow(furnace);
+        fuelRemaining -= fuelCount;
+        jobs.push({ position: block.position.clone(), batch });
+    }
+
+    if (jobs.length === 0)
+        return null;
+
+    log(bot, `Smelting ${jobs.reduce((sum, job) => sum + job.batch, 0)} ${itemName} across ${jobs.length} furnaces in parallel using ${fuel.name}.`);
+    const longestBatch = Math.max(...jobs.map(job => job.batch));
+    const completedWait = await wait(bot, longestBatch * 10000 + 3000);
+    let total = 0;
+
+    for (const job of jobs) {
+        const block = bot.blockAt(job.position);
+        if (!block || block.name !== 'furnace')
+            continue;
+        if (bot.entity.position.distanceTo(block.position) > 4)
+            await goToPosition(bot, block.position.x, block.position.y, block.position.z, 3);
+        const furnace = await bot.openFurnace(block);
+        const output = furnace.outputItem() ? await furnace.takeOutput() : null;
+        if (output)
+            total += output.count;
+        if (furnace.inputItem())
+            await furnace.takeInput();
+        if (furnace.fuelItem())
+            await furnace.takeFuel();
+        await bot.closeWindow(furnace);
+    }
+
+    if (!completedWait)
+        log(bot, `Parallel smelting was interrupted after producing ${total} items; furnace contents were recovered.`);
+    else if (total > 0)
+        log(bot, `Successfully smelted ${total} ${itemName} using ${jobs.length} furnaces in parallel.`);
+    return total > 0;
+}
+
 export async function smeltItem(bot, itemName, num=1) {
     /**
      * Puts 1 coal in furnace and smelts the given item name, waits until the furnace runs out of fuel or input items.
@@ -190,6 +323,12 @@ export async function smeltItem(bot, itemName, num=1) {
     if (!mc.isSmeltable(itemName)) {
         log(bot, `Cannot smelt ${itemName}. Hint: make sure you are smelting the 'raw' item.`);
         return false;
+    }
+
+    if (num >= 16) {
+        const parallelResult = await smeltItemInParallel(bot, itemName, num);
+        if (parallelResult !== null)
+            return parallelResult;
     }
 
     let placedFurnace = false;
@@ -239,7 +378,7 @@ export async function smeltItem(bot, itemName, num=1) {
 
     // fuel the furnace
     if (!furnace.fuelItem()) {
-        let fuel = mc.getSmeltingFuel(bot);
+        let fuel = mc.getSmeltingFuel(bot, num);
         if (!fuel) {
             log(bot, `You have no fuel to smelt ${itemName}, you need coal, charcoal, or wood.`);
             if (placedFurnace)
@@ -248,13 +387,20 @@ export async function smeltItem(bot, itemName, num=1) {
         }
         log(bot, `Using ${fuel.name} as fuel.`);
 
-        const put_fuel = Math.ceil(num / mc.getFuelSmeltOutput(fuel.name));
+        const fuelOutput = mc.getFuelSmeltOutput(fuel.name);
+        let put_fuel = Math.ceil(num / fuelOutput);
 
         if (fuel.count < put_fuel) {
-            log(bot, `You don't have enough ${fuel.name} to smelt ${num} ${itemName}; you need ${put_fuel}.`);
-            if (placedFurnace)
-                await collectBlock(bot, 'furnace', 1);
-            return false;
+            const requested = num;
+            num = Math.floor(fuel.count * fuelOutput);
+            if (num < 1) {
+                log(bot, `You don't have enough ${fuel.name} to smelt ${requested} ${itemName}; you need ${put_fuel}.`);
+                if (placedFurnace)
+                    await collectBlock(bot, 'furnace', 1);
+                return false;
+            }
+            put_fuel = fuel.count;
+            log(bot, `Fuel is enough for ${num} of ${requested} requested ${itemName}; smelting that batch now.`);
         }
         await furnace.putFuel(fuel.type, null, put_fuel);
         log(bot, `Added ${put_fuel} ${mc.getItemName(fuel.type)} to furnace fuel.`);
@@ -1493,6 +1639,35 @@ export async function moveAwayFromEntity(bot, entity, distance=16) {
     bot.pathfinder.setMovements(new pf.Movements(bot));
     await bot.pathfinder.goto(inverted_goal);
     return true;
+}
+
+export async function evadeHostile(bot, hostile, safeDistance=12) {
+    /** Move away from one hostile quickly, but stop after a short bounded attempt. */
+    if (!hostile || !mc.isHostile(hostile))
+        return false;
+
+    bot.pvp.stop();
+    bot.pathfinder.stop();
+    const invertedGoal = new pf.goals.GoalInvert(new pf.goals.GoalFollow(hostile, safeDistance));
+    const movements = new pf.Movements(bot);
+    movements.canDig = false;
+    movements.allow1by1towers = false;
+    bot.pathfinder.setMovements(movements);
+    bot.pathfinder.setGoal(invertedGoal, true);
+
+    const deadline = Date.now() + 6000;
+    while (Date.now() < deadline) {
+        const liveHostile = bot.entities[hostile.id];
+        if (!liveHostile || bot.entity.position.distanceTo(liveHostile.position) >= safeDistance)
+            break;
+        if (bot.interrupt_code)
+            break;
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    bot.pathfinder.stop();
+    bot.clearControlStates();
+    return !bot.entities[hostile.id] || bot.entity.position.distanceTo(bot.entities[hostile.id].position) >= safeDistance;
 }
 
 export async function avoidEnemies(bot, distance=16) {
