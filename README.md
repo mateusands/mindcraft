@@ -162,6 +162,15 @@ To connect to an unsupported minecraft version, you can try to use [viaproxy](se
 
 # Bot Profiles
 
+## Interactive local launcher
+
+On Linux, run `./iniciar-mindcraft.sh` (or install its desktop entry) after
+opening a Minecraft world to LAN. The terminal menu can generate a temporary
+Andy profile for MiMo, Groq, NVIDIA, local Ollama, an OpenAI model available to
+the configured key, or ordered fallback combinations. Generated profiles live
+under `bots/` and do not modify the tracked profile files. Closing the launcher
+terminal stops Mindcraft and its child processes.
+
 Bot profiles are json files (such as `andy.json`) that define:
 
 1. Bot backend LLMs to use for talking, coding, and embedding.

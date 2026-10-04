@@ -56,7 +56,86 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
     exit 1
 fi
 
+echo "========================================"
+echo "     Mindcraft — escolha a IA do Andy"
+echo "========================================"
+echo "1) MiMo 2.6 Flash → Groq (recomendado para o teste atual)"
+echo "2) Groq Qwen → MiMo"
+echo "3) Somente MiMo 2.6 Flash"
+echo "4) Somente Groq Qwen 3.8 27B"
+echo "5) Somente NVIDIA DeepSeek V4.1 Flash"
+echo "6) Somente Ollama Qwen3 1.7B (local)"
+echo "7) OpenAI — escolher modelo e esforço"
+echo "8) Automático completo"
+echo "0) Cancelar"
+echo
+read -r -p "Opção [1]: " provider_choice
+provider_choice="${provider_choice:-1}"
+
+preset=""
+selection_label=""
+case "$provider_choice" in
+    1) preset="mimo-groq"; selection_label="MiMo → Groq" ;;
+    2) preset="groq-mimo"; selection_label="Groq → MiMo" ;;
+    3) preset="mimo"; selection_label="somente MiMo" ;;
+    4) preset="groq"; selection_label="somente Groq" ;;
+    5) preset="nvidia"; selection_label="somente NVIDIA" ;;
+    6) preset="ollama"; selection_label="somente Ollama local" ;;
+    7) preset="openai" ;;
+    8) preset="automatic"; selection_label="automático completo" ;;
+    0) exit 0 ;;
+    *) echo "Opção inválida."; read -r -p "Pressione Enter para fechar..." _ || true; exit 1 ;;
+esac
+
+profile_args=("$preset")
+if [[ "$preset" == "openai" ]]; then
+    echo
+    echo "Consultando modelos disponíveis na sua chave OpenAI..."
+    openai_lines="$(node ./scripts/launcher-profile.js list-openai 2>/dev/null || true)"
+    if [[ -z "$openai_lines" ]]; then
+        echo "Não consegui consultar os modelos da chave OpenAI."
+        read -r -p "Pressione Enter para fechar..." _ || true
+        exit 1
+    fi
+    model_ids=()
+    model_labels=()
+    while IFS='|' read -r model_id model_label; do
+        [[ -n "$model_id" ]] || continue
+        model_ids+=("$model_id")
+        model_labels+=("$model_label")
+    done <<< "$openai_lines"
+    for index in "${!model_ids[@]}"; do
+        printf '%d) %s\n' "$((index + 1))" "${model_labels[$index]}"
+    done
+    echo
+    read -r -p "Modelo [1]: " model_choice
+    model_choice="${model_choice:-1}"
+    if [[ ! "$model_choice" =~ ^[0-9]+$ ]] || (( model_choice < 1 || model_choice > ${#model_ids[@]} )); then
+        echo "Modelo inválido."
+        read -r -p "Pressione Enter para fechar..." _ || true
+        exit 1
+    fi
+    selected_model="${model_ids[$((model_choice - 1))]}"
+
+    echo
+    echo "1) low — mais rápido"
+    echo "2) medium — equilibrado"
+    echo "3) high — mais raciocínio"
+    read -r -p "Esforço [1]: " effort_choice
+    case "${effort_choice:-1}" in
+        1) selected_effort="low" ;;
+        2) selected_effort="medium" ;;
+        3) selected_effort="high" ;;
+        *) echo "Esforço inválido."; read -r -p "Pressione Enter para fechar..." _ || true; exit 1 ;;
+    esac
+    profile_args+=("$selected_model" "$selected_effort")
+    selection_label="OpenAI $selected_model ($selected_effort)"
+fi
+
+PROFILE_PATH="$(node ./scripts/launcher-profile.js "${profile_args[@]}")"
+
 echo "Minecraft LAN detectado na porta $LAN_PORT."
+echo "Perfil escolhido: $selection_label"
 echo "Iniciando Mindcraft. Feche este terminal para desligar o bot."
 echo
 
@@ -69,7 +148,8 @@ cleanup() {
 }
 trap cleanup HUP INT TERM EXIT
 
-setsid env MINECRAFT_PORT="$LAN_PORT" npm start &
+profiles_json="$(node -e 'console.log(JSON.stringify([process.argv[1]]))' "$PROFILE_PATH")"
+setsid env MINECRAFT_PORT="$LAN_PORT" PROFILES="$profiles_json" npm start &
 child_pid=$!
 if wait "$child_pid"; then
     exit_code=0
