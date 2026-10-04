@@ -115,12 +115,9 @@ const modes_list = [
                 this.stuck_time = 0;
                 this.prev_dig_block = null;
             }
-            // A diamond pickaxe still needs about 9.4s per obsidian block and
-            // a batch can keep the bot in a tiny area for well over a minute.
-            // That is productive work, not a stuck pathfinder.
-            const miningObsidian = cur_dig_block?.name === 'obsidian' ||
-                agent.actions.currentActionLabel === 'action:makeObsidian';
-            const max_stuck_time = miningObsidian ? 180 : this.max_stuck_time;
+            const max_stuck_time = cur_dig_block?.name === 'obsidian'
+                ? this.max_stuck_time * 2
+                : this.max_stuck_time;
             if (this.stuck_time > max_stuck_time) {
                 say(agent, 'I\'m stuck!');
                 this.stuck_time = 0;

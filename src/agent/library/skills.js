@@ -2357,10 +2357,15 @@ function isPortalObsidian(bot, block) {
 async function mineSafeObsidian(bot, num) {
     // Keep scans local. Large predicate scans block the Mineflayer event loop.
     const nearby = world.getNearestBlocks(bot, ['obsidian'], 24, 64);
+    const partialFrame = findPartialNetherPortal(bot, 12);
+    const protectedFramePositions = partialFrame
+        ? NETHER_PORTAL_FRAME.map(([i, j]) => partialFrame.at(i, j))
+        : [];
     const unsafe = nearby.filter(block => {
         const touchesLava = [[0, -1, 0], [0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]
             .some(([x, y, z]) => bot.blockAt(block.position.offset(x, y, z))?.name === 'lava');
-        return touchesLava || isPortalObsidian(bot, block);
+        const belongsToPartialFrame = protectedFramePositions.some(position => block.position.equals(position));
+        return touchesLava || belongsToPartialFrame || isPortalObsidian(bot, block);
     }).map(block => block.position);
     const available = nearby.length - unsafe.length;
     if (available <= 0)
@@ -2465,11 +2470,53 @@ export async function makeObsidian(bot, num=10) {
     return have >= num;
 }
 
+const NETHER_PORTAL_FRAME = [
+    [1, 0], [2, 0],
+    [0, 1], [0, 2], [0, 3],
+    [3, 1], [3, 2], [3, 3],
+    [1, 4], [2, 4]
+];
+
+function findPartialNetherPortal(bot, radius=8) {
+    /** Find a nearby frame from a previous interrupted build and reuse it. */
+    const feet = bot.entity.position.floored();
+    let best = null;
+    for (const axis of ['x', 'z']) {
+        for (let dx = -radius; dx <= radius; dx++) {
+            for (let dz = -radius; dz <= radius; dz++) {
+                for (let dy = -4; dy <= 4; dy++) {
+                    const origin = feet.offset(dx, dy, dz);
+                    const at = (i, j) => axis === 'x'
+                        ? origin.offset(i, j, 0)
+                        : origin.offset(0, j, i);
+                    const existing = NETHER_PORTAL_FRAME.reduce((total, [i, j]) =>
+                        total + (bot.blockAt(at(i, j))?.name === 'obsidian' ? 1 : 0), 0);
+                    // Six matching positions cannot occur in a normal lava pool
+                    // and strongly identifies one of our interrupted frames.
+                    if (existing < 6)
+                        continue;
+                    const distance = Math.abs(dx) + Math.abs(dy) + Math.abs(dz);
+                    const score = existing * 100 - distance;
+                    if (!best || score > best.score)
+                        best = {at, origin, axis, existing, missing: 10 - existing, score};
+                }
+            }
+        }
+    }
+    return best;
+}
+
 export async function buildNetherPortal(bot) {
-    /** Build a minimal 10-obsidian frame on dry solid ground and verify that it lights. */
+    /** Build or repair a minimal frame, then verify that it lights. */
     const counts = world.getInventoryCounts(bot);
-    if ((counts.obsidian || 0) < 10) {
-        log(bot, `Need 10 obsidian to build a Nether portal; you have ${counts.obsidian || 0}.`);
+    const partial = findPartialNetherPortal(bot);
+    const requiredObsidian = partial ? partial.missing : 10;
+    if ((counts.obsidian || 0) < requiredObsidian) {
+        const additional = requiredObsidian - (counts.obsidian || 0);
+        const detail = partial
+            ? `A partial frame with ${partial.existing}/10 obsidian was found at ${partial.origin}. It has ${requiredObsidian} empty frame positions; you already carry ${counts.obsidian || 0}, so acquire only ${additional} additional obsidian (inventory target: ${requiredObsidian}).`
+            : 'No reusable partial frame was found nearby.';
+        log(bot, detail);
         return false;
     }
     if (!counts.flint_and_steel && !counts.fire_charge) {
@@ -2479,8 +2526,8 @@ export async function buildNetherPortal(bot) {
 
     const interior = [[1, 1], [2, 1], [1, 2], [2, 2], [1, 3], [2, 3]];
     const feet = bot.entity.position.floored();
-    let best = null;
-    for (const axis of ['x', 'z']) {
+    let best = partial;
+    for (const axis of partial ? [] : ['x', 'z']) {
         for (let dx = -5; dx <= 5; dx++) {
             for (let dz = -5; dz <= 5; dz++) {
                 for (let dy = -1; dy <= 1; dy++) {
@@ -2518,7 +2565,7 @@ export async function buildNetherPortal(bot) {
         }
     }
 
-    let placedObsidian = 0;
+    let placedObsidian = partial?.existing || 0;
     const filler = () => getScaffoldItem(bot)?.name ||
         ((world.getInventoryCounts(bot).obsidian || 0) > 10 - placedObsidian ? 'obsidian' : null);
     const order = [
@@ -2529,15 +2576,15 @@ export async function buildNetherPortal(bot) {
     ];
     for (const [kind, i, j] of order) {
         if (bot.interrupt_code) return false;
+        const pos = at(i, j);
+        const existing = bot.blockAt(pos);
+        if (kind === 'obsidian' && existing?.name === 'obsidian') continue;
+        if (kind === 'corner' && existing?.boundingBox === 'block') continue;
         const name = kind === 'corner' ? filler() : 'obsidian';
         if (!name) {
             log(bot, 'Need a few cheap solid blocks for the four portal corners.');
             return false;
         }
-        const pos = at(i, j);
-        const existing = bot.blockAt(pos);
-        if (name === 'obsidian' && existing?.name === 'obsidian') continue;
-        if (kind === 'corner' && existing?.boundingBox === 'block') continue;
         if (!(await placeBlock(bot, name, pos.x, pos.y, pos.z, 'bottom', true))) {
             log(bot, `Failed to place ${name} at ${pos}.`);
             return false;
