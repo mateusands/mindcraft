@@ -8,6 +8,8 @@ export class AgentProcess {
     constructor(name, port) {
         this.name = name;
         this.port = port;
+        this.restartAttempts = 0;
+        this.restartTimer = null;
     }
 
     start(load_memory=false, init_message=null, count_id=0) {
@@ -28,7 +30,7 @@ export class AgentProcess {
             stderr: 'inherit',
         });
         
-        let last_restart = Date.now();
+        const startedAt = Date.now();
         agentProcess.on('exit', (code, signal) => {
             console.log(`Agent process exited with code ${code} and signal ${signal}`);
             this.running = false;
@@ -40,14 +42,25 @@ export class AgentProcess {
             }
 
             if (code !== 0 && signal !== 'SIGINT') {
-                // agent must run for at least 10 seconds before restarting
-                if (Date.now() - last_restart < 10000) {
-                    console.error(`Agent process exited too quickly and will not be restarted.`);
-                    return;
-                }
-                console.log('Restarting agent...');
-                this.start(true, 'Agent process restarted.', count_id, this.port);
-                last_restart = Date.now();
+                // Keep retrying transient Minecraft/LAN disconnects. A quick
+                // reconnect can fail while the server is still releasing the
+                // previous session, so use bounded exponential backoff rather
+                // than permanently abandoning the agent.
+                const runtime = Date.now() - startedAt;
+                this.restartAttempts = runtime >= 30000 ? 0 : this.restartAttempts + 1;
+                const delayMs = Math.min(30000, 2000 * (2 ** Math.min(Math.max(this.restartAttempts - 1, 0), 4)));
+                console.log(`Restarting agent in ${delayMs / 1000}s (attempt ${this.restartAttempts})...`);
+                clearTimeout(this.restartTimer);
+                this.restartTimer = setTimeout(() => {
+                    this.restartTimer = null;
+                    // Load the same world's memory and resume the interrupted
+                    // task after the Minecraft session is available again.
+                    this.start(
+                        true,
+                        'You reconnected after an interruption. Check your current state and continue the most recent unfinished player request. Do not merely announce the restart.',
+                        count_id
+                    );
+                }, delayMs);
             }
         });
     
@@ -59,6 +72,10 @@ export class AgentProcess {
     }
 
     stop() {
+        if (this.restartTimer) {
+            clearTimeout(this.restartTimer);
+            this.restartTimer = null;
+        }
         if (!this.running) return;
         this.process.kill('SIGINT');
     }

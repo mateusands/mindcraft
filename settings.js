@@ -29,7 +29,7 @@ const settings = {
     "load_memory": true, // load memory only from the current Minecraft world/save
     "memory_world_id": "auto", // auto = newest local save; set a fixed name for remote servers
     "minecraft_saves_path": "/home/mateuswzt/.local/share/PrismLauncher/instances",
-    "init_message": "Respond with hello world and your name", // sends to all on spawn
+    "init_message": null, // do not inject a recurring task into the saved conversation
     "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
 
     "speak": false,
@@ -46,12 +46,12 @@ const settings = {
     "allow_vision": false, // allows vision model to interpret screenshots as inputs
     "blocked_actions" : ["!checkBlueprint", "!checkBlueprintLevel", "!getBlueprint", "!getBlueprintLevel"] , // commands to disable and remove from docs. Ex: ["!setMode"]
     "code_timeout_mins": -1, // minutes code is allowed to run. -1 for no timeout
-    "relevant_docs_count": 5, // number of relevant code function docs to select for prompting. -1 for all
-    "relevant_knowledge_count": 3, // number of Minecraft knowledge notes retrieved for the current request
+    "relevant_docs_count": 3, // compact command context for faster local inference
+    "relevant_knowledge_count": 2, // only the two strongest Minecraft knowledge matches
     "knowledge_database": "./bots/shared/minecraft_knowledge.sqlite", // hybrid SQLite FTS5 + sqlite-vec RAG index
 
-    "max_messages": 15, // max number of messages to keep in context
-    "num_examples": 2, // number of examples to give to the model
+    "max_messages": 10, // compact history for faster, more focused local inference
+    "num_examples": 1, // one highly relevant example is enough for the Minecraft-tuned model
     "max_commands": -1, // max number of commands that can be used in consecutive responses. -1 for no limit
     "show_command_syntax": "full", // "full", "shortened", or "none"
     "narrate_behavior": true, // chat simple automatic actions ('Picking up item!')

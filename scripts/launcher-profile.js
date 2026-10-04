@@ -59,6 +59,19 @@ const ollama = () => ({
     }
 });
 
+const andy4 = () => ({
+    name: 'ollama-andy-4-micro-minecraft',
+    api: 'ollama',
+    model: 'sweaterdog/andy-4:micro-q8_0',
+    timeout_ms: 30000,
+    cooldown_ms: 3000,
+    params: {
+        think: false,
+        keep_alive: '30m',
+        options: { temperature: 0.1, num_predict: 1200, num_ctx: 8192 }
+    }
+});
+
 const openai = (model = 'gpt-6-luna', effort = 'low') => ({
     name: `openai-${model}`,
     api: 'openai',
@@ -124,6 +137,7 @@ async function main() {
         case 'groq': providers = [groq()]; break;
         case 'nvidia': providers = [nvidia()]; break;
         case 'ollama': providers = [ollama()]; break;
+        case 'andy4': providers = [andy4()]; break;
         case 'openai': providers = [openai(model, effort)]; break;
         case 'automatic': providers = [nvidia(), groq(), mimo(), ollama(), { ...openai('gpt-6-luna', 'low'), rpm: 1 }]; break;
         default: throw new Error(`Unknown launcher preset: ${preset}`);

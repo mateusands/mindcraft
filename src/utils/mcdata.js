@@ -17,7 +17,7 @@ let Item = null;
  * @typedef {string} BlockName
 */
 
-export const WOOD_TYPES = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry'];
+export const WOOD_TYPES = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry', 'pale_oak'];
 export const MATCHING_WOOD_BLOCKS = [
     'log',
     'planks',
@@ -392,11 +392,44 @@ export function getItemAnimalSource(itemName) {
 }
 
 export function getBlockTool(blockName) {
+    return getBlockTools(blockName)[0] || null;
+}
+
+export function getBlockTools(blockName) {
     let block = mcdata.blocksByName[blockName];
     if (!block || !block.harvestTools) {
-        return null;
+        return [];
     }
-    return getItemName(Object.keys(block.harvestTools)[0]);  // Double check first tool is always simplest
+    const tier = name => {
+        if (/^(wooden|golden)_/.test(name)) return 0;
+        if (name.startsWith('stone_')) return 1;
+        if (/^(copper|iron)_/.test(name)) return 2;
+        if (name.startsWith('diamond_')) return 3;
+        if (name.startsWith('netherite_')) return 4;
+        return 5;
+    };
+    return Object.keys(block.harvestTools)
+        .map(id => getItemName(id))
+        .filter(Boolean)
+        .sort((a, b) => tier(a) - tier(b));
+}
+
+export function getWoodSourceBlockNames() {
+    const netherWood = new Set([
+        'crimson_stem', 'warped_stem', 'stripped_crimson_stem', 'stripped_warped_stem',
+        'crimson_hyphae', 'warped_hyphae', 'stripped_crimson_hyphae', 'stripped_warped_hyphae'
+    ]);
+    return getAllBlocks()
+        .map(block => block.name)
+        .filter(name => name === 'bamboo' || name === 'block_of_bamboo' || /(?:_log|_wood)$/.test(name) || netherWood.has(name));
+}
+
+export function getPlanksForWoodSource(source) {
+    if (source === 'bamboo' || source === 'block_of_bamboo') return 'bamboo_planks';
+    const base = source
+        .replace(/^stripped_/, '')
+        .replace(/_(?:log|wood|stem|hyphae)$/, '');
+    return `${base}_planks`;
 }
 
 export function makeItem(name, amount=1) {

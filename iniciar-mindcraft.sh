@@ -65,12 +65,17 @@ echo "3) Somente MiMo 2.6 Flash"
 echo "4) Somente Groq Qwen 3.8 27B"
 echo "5) Somente NVIDIA DeepSeek V4.1 Flash"
 echo "6) Somente Ollama Qwen3 1.7B (local)"
-echo "7) OpenAI — escolher modelo e esforço"
-echo "8) Automático completo"
+echo "7) Ollama Andy 4 Micro Q8 (local, especializado e leve)"
+echo "8) OpenAI — escolher modelo e esforço"
+echo "9) Automático completo"
 echo "0) Cancelar"
 echo
-read -r -p "Opção [1]: " provider_choice
-provider_choice="${provider_choice:-1}"
+if [[ -n "${MINDCRAFT_PRESET_CHOICE:-}" ]]; then
+    provider_choice="$MINDCRAFT_PRESET_CHOICE"
+else
+    read -r -p "Opção [1]: " provider_choice
+    provider_choice="${provider_choice:-1}"
+fi
 
 preset=""
 selection_label=""
@@ -81,8 +86,9 @@ case "$provider_choice" in
     4) preset="groq"; selection_label="somente Groq" ;;
     5) preset="nvidia"; selection_label="somente NVIDIA" ;;
     6) preset="ollama"; selection_label="somente Ollama local" ;;
-    7) preset="openai" ;;
-    8) preset="automatic"; selection_label="automático completo" ;;
+    7) preset="andy4"; selection_label="Ollama Andy 4 Micro Q8 local" ;;
+    8) preset="openai" ;;
+    9) preset="automatic"; selection_label="automático completo" ;;
     0) exit 0 ;;
     *) echo "Opção inválida."; read -r -p "Pressione Enter para fechar..." _ || true; exit 1 ;;
 esac

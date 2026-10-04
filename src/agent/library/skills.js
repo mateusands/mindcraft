@@ -51,6 +51,27 @@ export async function craftRecipe(bot, itemName, num=1) {
 
     // get recipes that don't require a crafting table
     let recipes = bot.recipesFor(mc.getItemId(itemName), null, 1, null); 
+
+    // A request for one plank species is usually about obtaining usable
+    // planks, not preserving a particular color. If the requested species
+    // cannot be crafted from the current inventory, transparently use any
+    // other plank recipe that can. This keeps oak/spruce/dark-oak/etc. from
+    // becoming artificial blockers for sticks, tools, and crafting tables.
+    if ((!recipes || recipes.length === 0) && itemName.endsWith('_planks')) {
+        const plankItems = mc.getAllItems()
+            .map(item => item.name)
+            .filter(name => name.endsWith('_planks') && name !== itemName);
+        for (const alternative of plankItems) {
+            const alternativeRecipes = bot.recipesFor(mc.getItemId(alternative), null, 1, null);
+            if (alternativeRecipes && alternativeRecipes.length > 0) {
+                log(bot, `Requested ${itemName}, but the available wood crafts ${alternative}; using ${alternative} instead.`);
+                itemName = alternative;
+                recipes = alternativeRecipes;
+                break;
+            }
+        }
+    }
+
     let craftingTable = null;
     const craftingTableRange = 16;
     placeTable: if (!recipes || recipes.length === 0) {
@@ -88,7 +109,16 @@ export async function craftRecipe(bot, itemName, num=1) {
             .filter(([key, value]) => (inventory[key] || 0) < value)
             .map(([key, value]) => `${key}: ${value - (inventory[key] || 0)}`)
             .join(', ');
-        log(bot, `You do not have the resources to craft a ${itemName}. Missing for the best inventory-compatible recipe: ${missing || 'unknown ingredients'}. Wood variants such as oak_planks and spruce_planks are interchangeable only when the recipe supports the wood tag.`);
+        let woodHint = '';
+        if (itemName.endsWith('_planks')) {
+            const nearbyWood = world.getNearestBlocks(bot, mc.getWoodSourceBlockNames(), 32, 1)?.[0];
+            if (nearbyWood) {
+                const source = nearbyWood.name;
+                const planks = mc.getPlanksForWoodSource(source);
+                woodHint = ` Nearby usable wood is ${source}. Collect it, then craft ${planks}; do not retry ${itemName} unless you obtain its matching source.`;
+            }
+        }
+        log(bot, `You do not have the resources to craft ${itemName}. Missing for the best inventory-compatible recipe: ${missing || 'unknown ingredients'}.${woodHint}`);
         if (placedTable) {
             await collectBlock(bot, 'crafting_table', 1);
         }
@@ -435,6 +465,15 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         log(bot, `Invalid number of blocks to collect: ${num}.`);
         return false;
     }
+    if (['wood', 'log', 'logs', 'tree', 'trees'].includes(blockType)) {
+        const nearbyWood = world.getNearestBlocks(bot, mc.getWoodSourceBlockNames(), 64, 1)?.[0];
+        if (!nearbyWood) {
+            log(bot, 'No usable wood source nearby to collect.');
+            return false;
+        }
+        log(bot, `Resolved generic ${blockType} to nearby ${nearbyWood.name}.`);
+        blockType = nearbyWood.name;
+    }
     let blocktypes = [blockType];
     if (blockType === 'coal' || blockType === 'diamond' || blockType === 'emerald' || blockType === 'iron' || blockType === 'gold' || blockType === 'lapis_lazuli' || blockType === 'redstone')
         blocktypes.push(blockType+'_ore');
@@ -494,7 +533,11 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         }
         const itemId = bot.heldItem ? bot.heldItem.type : null
         if (!block.canHarvest(itemId)) {
-            log(bot, `Don't have right tools to harvest ${blockType}.`);
+            const requiredTools = mc.getBlockTools(block.name);
+            const requirement = requiredTools.length > 0
+                ? ` Required tool: ${requiredTools.join(' or ')}.`
+                : '';
+            log(bot, `Cannot harvest ${blockType} with the current inventory.${requirement}`);
             return false;
         }
         try {
@@ -599,7 +642,11 @@ export async function breakBlockAt(bot, x, y, z) {
             await bot.tool.equipForBlock(block);
             const itemId = bot.heldItem ? bot.heldItem.type : null
             if (!block.canHarvest(itemId)) {
-                log(bot, `Don't have right tools to break ${block.name}.`);
+                const requiredTools = mc.getBlockTools(block.name);
+                const requirement = requiredTools.length > 0
+                    ? ` Required tool: ${requiredTools.join(' or ')}.`
+                    : '';
+                log(bot, `Cannot break ${block.name} with the current inventory.${requirement}`);
                 return false;
             }
         }
