@@ -45,7 +45,7 @@ const modes_list = [
         interrupts: ['all'],
         on: true,
         active: false,
-        fall_blocks: ['sand', 'gravel', 'concrete_powder'], // includes matching substrings like 'sandstone' and 'red_sand'
+        fall_blocks: ['sand', 'red_sand', 'gravel'],
         update: async function (agent) {
             const bot = agent.bot;
             let block = bot.blockAt(bot.entity.position);
@@ -58,9 +58,12 @@ const modes_list = [
                     bot.setControlState('jump', true);
                 }
             }
-            else if (this.fall_blocks.some(name => blockAbove.name.includes(name))) {
+            else if (agent.actions.currentActionLabel !== 'action:goToSurface' &&
+                (this.fall_blocks.includes(blockAbove.name) || blockAbove.name.endsWith('_concrete_powder'))) {
                 execute(this, agent, async () => {
-                    await skills.moveAway(bot, 2);
+                    // Do not pathfind sideways or downward while buried. Clear
+                    // the falling block in place; repeat if more gravel/sand falls.
+                    await skills.breakBlockAt(bot, blockAbove.position.x, blockAbove.position.y, blockAbove.position.z);
                 });
             }
             else if (skills.isInImmediateLavaDanger(bot)) {
@@ -112,7 +115,12 @@ const modes_list = [
                 this.stuck_time = 0;
                 this.prev_dig_block = null;
             }
-            const max_stuck_time = cur_dig_block?.name === 'obsidian' ? this.max_stuck_time * 2 : this.max_stuck_time;
+            // A diamond pickaxe still needs about 9.4s per obsidian block and
+            // a batch can keep the bot in a tiny area for well over a minute.
+            // That is productive work, not a stuck pathfinder.
+            const miningObsidian = cur_dig_block?.name === 'obsidian' ||
+                agent.actions.currentActionLabel === 'action:makeObsidian';
+            const max_stuck_time = miningObsidian ? 180 : this.max_stuck_time;
             if (this.stuck_time > max_stuck_time) {
                 say(agent, 'I\'m stuck!');
                 this.stuck_time = 0;

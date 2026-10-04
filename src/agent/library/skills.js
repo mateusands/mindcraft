@@ -89,14 +89,30 @@ function isAirLike(block) {
 function safeStandingPositionBeside(bot, block) {
     const offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     for (const [dx, dz] of offsets) {
-        const feet = block.position.offset(dx, 0, dz);
-        const feetBlock = bot.blockAt(feet);
-        const headBlock = bot.blockAt(feet.offset(0, 1, 0));
-        const floor = bot.blockAt(feet.offset(0, -1, 0));
-        if (isAirLike(feetBlock) && isAirLike(headBlock) && floor?.boundingBox === 'block' &&
-            !DANGER_BLOCKS.includes(floor.name) && floor.name !== 'lava')
-            return feet;
+        // A natural pool can have either a recessed ledge (feet level with the
+        // lava) or a full block rim (feet one block above the lava).
+        for (const dy of [1, 0]) {
+            const feet = block.position.offset(dx, dy, dz);
+            const feetBlock = bot.blockAt(feet);
+            const headBlock = bot.blockAt(feet.offset(0, 1, 0));
+            const floor = bot.blockAt(feet.offset(0, -1, 0));
+            if (isAirLike(feetBlock) && isAirLike(headBlock) && floor?.boundingBox === 'block' &&
+                !DANGER_BLOCKS.includes(floor.name) && floor.name !== 'lava')
+                return feet;
+        }
     }
+    return null;
+}
+
+function currentDryStandingPosition(bot, target) {
+    const feet = bot.entity.position.floored();
+    const feetBlock = bot.blockAt(feet);
+    const headBlock = bot.blockAt(feet.offset(0, 1, 0));
+    const floor = bot.blockAt(feet.offset(0, -1, 0));
+    const inReach = bot.entity.position.distanceTo(target.position.offset(0.5, 0.5, 0.5)) <= 5;
+    if (inReach && isAirLike(feetBlock) && isAirLike(headBlock) && floor?.boundingBox === 'block' &&
+        !DANGER_BLOCKS.includes(floor.name) && floor.name !== 'lava')
+        return feet;
     return null;
 }
 
@@ -850,20 +866,20 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             if (!blocktypes.includes(block.name)) {
                 return false;
             }
-            if (exclude) {
-                for (let position of exclude) {
-                    if (block.position.x === position.x && block.position.y === position.y && block.position.z === position.z) {
-                        return false;
-                    }
-                }
-            }
             if (isLiquid) {
                 // collect only source blocks
                 return block.metadata === 0;
             }
             
             return movements.safeToBreak(block) || unsafeBlocks.includes(block.name);
-        }, 64, 1);
+        }, 64, exclude ? 64 : 1);
+        // Mineflayer may invoke a findBlocks predicate with palette blocks
+        // whose position is null. Coordinate exclusions therefore belong on
+        // the concrete results returned by findBlocks, not inside its predicate.
+        if (exclude) {
+            blocks = blocks.filter(block => block?.position && !exclude.some(position =>
+                position && block.position.equals(position))).slice(0, 1);
+        }
 
         if (blocks.length === 0) {
             if (collected === 0)
@@ -2352,6 +2368,22 @@ async function mineSafeObsidian(bot, num) {
     return await collectBlock(bot, 'obsidian', Math.min(num, available), unsafe);
 }
 
+function nearbySafeLava(bot, range=24) {
+    // Only consider already exposed source blocks. This deliberately does not
+    // mine or tunnel to "search" for a pool: the bot must be able to see and
+    // approach a dry ledge beside the lava in the currently loaded cave.
+    return world.getNearestBlocks(bot, ['lava'], range, 32)
+        .filter(block => block.metadata === 0)
+        .filter(block => isAirLike(bot.blockAt(block.position.offset(0, 1, 0))))
+        // makeObsidian never pathfinds around a pool. It only uses lava already
+        // within bucket reach from the bot's current dry, solid footing.
+        .map(block => ({
+            block,
+            stand: currentDryStandingPosition(bot, block)
+        }))
+        .filter(candidate => candidate.stand);
+}
+
 export async function makeObsidian(bot, num=10) {
     /** Safely pour water from dry ground and mine only obsidian that cannot fall into lava. */
     const count = () => world.getInventoryCounts(bot).obsidian || 0;
@@ -2369,8 +2401,6 @@ export async function makeObsidian(bot, num=10) {
     for (let attempt = 0; attempt < 25 && count() < num; attempt++) {
         if (bot.interrupt_code)
             return false;
-        if (await mineSafeObsidian(bot, num - count()))
-            continue;
 
         if (!bot.inventory.findInventoryItem('water_bucket')) {
             if (!bot.inventory.findInventoryItem('bucket')) {
@@ -2386,22 +2416,20 @@ export async function makeObsidian(bot, num=10) {
 
         // Search by block ID first so Mineflayer can skip chunk sections that do
         // not contain lava, then inspect source metadata on the small result set.
-        const lava = world.getNearestBlocks(bot, ['lava'], 24, 24)
-            .filter(block => block.metadata === 0)
-            .filter(block => !tried.some(pos => pos.distanceTo(block.position) < 3))
-            .filter(block => isAirLike(bot.blockAt(block.position.offset(0, 1, 0))))
-            .map(block => ({block, stand: safeStandingPositionBeside(bot, block)}))
-            .filter(candidate => candidate.stand);
+        const lava = nearbySafeLava(bot)
+            .filter(({block}) => !tried.some(pos => pos.distanceTo(block.position) < 3));
         if (lava.length === 0) {
-            log(bot, 'No nearby lava source pool. Explore safely below y=0, then retry !makeObsidian.');
+            // There is no exposed lava left to flood. Only now collect
+            // obsidian that is already demonstrably isolated from lava.
+            if (await mineSafeObsidian(bot, num - count()))
+                continue;
+            log(bot, 'No exposed lava is within bucket reach from the current dry ledge. Move to a dry block beside a visible pool and retry; !makeObsidian will not pathfind or dig around lava.');
             return false;
         }
 
         const {block: target, stand} = lava[0];
         tried.push(target.position.clone());
         log(bot, `Pouring water onto lava from safe ground at ${target.position}.`);
-        if (!(await goToPosition(bot, stand.x, stand.y, stand.z, 0)))
-            continue;
         const floor = bot.blockAt(bot.entity.position.floored().offset(0, -1, 0));
         if (isInImmediateLavaDanger(bot) || floor?.boundingBox !== 'block') {
             log(bot, 'Refusing to pour water: no dry solid floor under the bot.');
@@ -2613,21 +2641,107 @@ export async function digDown(bot, distance = 10) {
 
 export async function goToSurface(bot) {
     /**
-     * Navigate to the surface (highest non-air block at current x,z).
+     * Navigate to the surface. Very deep climbs use a deterministic pillar
+     * instead of making pathfinder search an enormous vertical route.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @returns {Promise<boolean>} true if the surface was reached, false otherwise.
      **/
     const pos = bot.entity.position;
-    for (let y = 360; y > -64; y--) { // probably not the best way to find the surface but it works
+    const worldTop = bot.game.height ? bot.game.minY + bot.game.height : 320;
+    let surface = null;
+    for (let y = worldTop - 1; y > pos.y; y--) {
         const block = bot.blockAt(new Vec3(pos.x, y, pos.z));
-        if (!block || block.name === 'air' || block.name === 'cave_air') {
-            continue;
+        if (block?.boundingBox === 'block' && !block.name.includes('leaves')) {
+            surface = block;
+            break;
         }
-        await goToPosition(bot, block.position.x, block.position.y + 1, block.position.z, 0); // this will probably work most of the time but a custom mining and towering up implementation could be added if needed
-        log(bot, `Going to the surface at y=${y+1}.`);``
+    }
+    if (!surface) {
+        log(bot, 'Already at the surface.');
         return true;
     }
-    return false;
+    if (getDimension(bot) === 'the_nether') {
+        log(bot, 'Cannot go to the surface in the Nether because of the bedrock ceiling.');
+        return false;
+    }
+    const targetY = surface.position.y + 1;
+    const climb = Math.ceil(targetY - bot.entity.position.y);
+    log(bot, `Going to the surface at y=${targetY}.`);
+    if (climb <= 32) {
+        const reached = await goToPosition(bot, surface.position.x, targetY, surface.position.z, 2);
+        if (reached && bot.entity.position.y >= targetY - 1)
+            return true;
+        if (bot.interrupt_code)
+            return false;
+    }
+    log(bot, `Vertical route is ${climb} blocks; pillaring up instead of running a large pathfinder search.`);
+    return await pillarUp(bot, climb);
+}
+
+export async function pillarUp(bot, height=1) {
+    /** Dig headroom and place cheap blocks below while jumping upward. */
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const startY = Math.floor(bot.entity.position.y);
+    const targetY = startY + height;
+    let failures = 0;
+    bot.pathfinder.stop();
+    while (Math.floor(bot.entity.position.y + 0.01) < targetY) {
+        if (bot.interrupt_code)
+            return false;
+        if (failures > 4) {
+            log(bot, `Could not pillar up; stopped at y=${Math.floor(bot.entity.position.y)}.`);
+            return false;
+        }
+        const feet = bot.entity.position.floored();
+        for (let i = 0; i < 6; i++) {
+            const above = bot.blockAt(feet.offset(0, 2, 0));
+            if (!above || above.boundingBox !== 'block')
+                break;
+            if (above.name === 'bedrock' || !(await breakBlockAt(bot, above.position.x, above.position.y, above.position.z))) {
+                log(bot, `Blocked by ${above?.name || 'unknown block'} overhead.`);
+                return false;
+            }
+            await sleep(250);
+        }
+        const above = bot.blockAt(feet.offset(0, 2, 0));
+        if (above?.boundingBox === 'block') {
+            log(bot, `Still blocked by ${above.name} above after clearing falling blocks.`);
+            failures++;
+            continue;
+        }
+        const scaffold = getScaffoldItem(bot);
+        if (!scaffold) {
+            log(bot, 'Need dirt, cobblestone, or another cheap solid block to pillar up.');
+            return false;
+        }
+        const below = bot.blockAt(feet.offset(0, -1, 0));
+        if (!below || below.boundingBox !== 'block' || below.name === 'lava') {
+            log(bot, `Cannot pillar from ${feet}: floor is ${below?.name || 'missing'}.`);
+            await sleep(300);
+            failures++;
+            continue;
+        }
+        await bot.equip(scaffold, 'hand');
+        const y0 = bot.entity.position.y;
+        bot.setControlState('jump', true);
+        for (let tick = 0; tick < 20 && bot.entity.position.y < y0 + 1; tick++)
+            await sleep(25);
+        try {
+            await bot.placeBlock(below, new Vec3(0, 1, 0));
+        } catch (err) { /* placement can succeed even if Mineflayer reports an error */ }
+        bot.setControlState('jump', false);
+        for (let tick = 0; tick < 20 && !bot.entity.onGround; tick++)
+            await sleep(50);
+        if (Math.floor(bot.entity.position.y + 0.01) > feet.y)
+            failures = 0;
+        else {
+            log(bot, `Pillar placement did not raise the bot above y=${feet.y}.`);
+            failures++;
+        }
+    }
+    bot.clearControlStates();
+    log(bot, `Pillared up ${Math.floor(bot.entity.position.y) - startY} blocks to y=${Math.floor(bot.entity.position.y)}.`);
+    return true;
 }
 
 export async function useToolOn(bot, toolName, targetName) {
