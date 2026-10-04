@@ -33,7 +33,7 @@ async function equipHighestAttack(bot) {
         await bot.equip(weapon, 'hand');
 }
 
-export async function craftRecipe(bot, itemName, num=1) {
+export async function craftRecipe(bot, itemName, num=1, keepTable=false) {
     /**
      * Attempt to craft the given item name from a recipe. May craft many items.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
@@ -119,6 +119,8 @@ export async function craftRecipe(bot, itemName, num=1) {
             }
         }
         log(bot, `You do not have the resources to craft ${itemName}. Missing for the best inventory-compatible recipe: ${missing || 'unknown ingredients'}.${woodHint}`);
+        if (placedTable && !keepTable)
+            await collectBlock(bot, 'crafting_table', 1);
         return false;
     }
     
@@ -136,8 +138,12 @@ export async function craftRecipe(bot, itemName, num=1) {
     await bot.craft(recipe, Math.min(craftLimit.num, num), craftingTable);
     if(craftLimit.num<num) log(bot, `Not enough ${craftLimit.limitingResource} to craft ${num}, crafted ${craftLimit.num}. You now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     else log(bot, `Successfully crafted ${itemName}, you now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
-    if (placedTable)
-        log(bot, 'Left the crafting_table in place so it can be reused for the next recipes.');
+    if (placedTable) {
+        if (keepTable)
+            log(bot, 'Keeping the crafting_table in place until the equipment batch is complete.');
+        else
+            await collectBlock(bot, 'crafting_table', 1);
+    }
 
     //Equip any armor the bot may have crafted.
     //There is probablly a more efficient method than checking the entire inventory but this is all mineflayer-armor-manager provides. :P
@@ -151,6 +157,7 @@ export async function craftEquipmentSet(bot, material, includeArmor=true, includ
     const armorMaterials = new Set(['leather', 'iron', 'golden', 'diamond']);
     const toolMaterials = new Set(['wooden', 'stone', 'iron', 'golden', 'diamond']);
     const wanted = [];
+    const initialTable = world.getNearestBlock(bot, 'crafting_table', 16);
 
     if (includeArmor) {
         if (!armorMaterials.has(material)) {
@@ -176,7 +183,7 @@ export async function craftEquipmentSet(bot, material, includeArmor=true, includ
             alreadyOwned.push(itemName);
             continue;
         }
-        if (await craftRecipe(bot, itemName, 1))
+        if (await craftRecipe(bot, itemName, 1, true))
             crafted.push(itemName);
         else
             failed.push(itemName);
@@ -185,6 +192,10 @@ export async function craftEquipmentSet(bot, material, includeArmor=true, includ
     }
 
     await bot.armorManager.equipAll();
+    if (!initialTable && world.getNearestBlock(bot, 'crafting_table', 16)) {
+        await collectBlock(bot, 'crafting_table', 1);
+        log(bot, 'Collected the crafting_table after completing the equipment batch.');
+    }
     log(bot, `Equipment batch complete. Crafted: ${crafted.join(', ') || 'none'}. Already owned: ${alreadyOwned.join(', ') || 'none'}. Failed: ${failed.join(', ') || 'none'}.`);
     return failed.length === 0 && crafted.length + alreadyOwned.length === wanted.length;
 }
